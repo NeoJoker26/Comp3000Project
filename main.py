@@ -2,63 +2,63 @@ import sys
 import os
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
-import sqlalchemy
+from  sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import List, Optional
 import pandas as pd
 
 
-class DatabaseExporter:
+class DatabaseExporter():
     def __init__(self):
         pass
 
     def main(self):
-        window = tk.Tk()
-        window.title("Search for Database")
-        window.geometry("500x400")
-        window.resizable(False, False)
 
-        excelFrame = tk.LabelFrame(
+        excel_frame = tk.LabelFrame(
             window,
             text="Excel Database"
         )
-        excelFrame.place(height=200, width=480, relx=0.5, rely=0, anchor=tk.N)
+        excel_frame.pack(fill="both")
 
-        openFrame = tk.LabelFrame(
+        self.excel_treeview = ttk.Treeview(
+            window,
+        )
+        self.excel_treeview.pack(expand=True, fill="both")
+
+        open_frame = tk.LabelFrame(
             window,
             text="Open File",
             labelanchor='n'
         )
-        openFrame.place(height=130, width=240, relx=0.25, rely=0.5)
+        open_frame.pack(expand=True, fill="both")
 
-        addDatabaseButton = tk.Button(
+        add_database_button = tk.Button(
+            open_frame,
             text="Add database",
             command=self.open_file
         )
-        addDatabaseButton.place(relx=0.42, rely=0.73)
+        add_database_button.pack(expand=True)
 
-        self.databaseLabel = tk.Label(
-            window,
-            text="FileNan"
+        self.database_label = tk.Label(
+            open_frame,
+            text="FileNaN"
         )
-        self.databaseLabel.place(relx=0.4, rely=0.65)
+        self.database_label.pack(expand=True)
 
-        excelTreeview = ttk.Treeview(
-            window,
-
-        )
-        excelTreeview.place(height=175, width=470, relx=0.5, rely=0.05, anchor=tk.N)
         xScroll = tk.Scrollbar(
-            excelTreeview,
+            self.excel_treeview,
             orient="vertical",
-            command=excelTreeview.yview
+            command=self.excel_treeview.yview
         )
         yScroll = tk.Scrollbar(
-            excelTreeview,
+            self.excel_treeview,
             orient="horizontal",
-            command=excelTreeview.xview
+            command=self.excel_treeview.xview
         )
-        excelTreeview.config(yscrollcommand=yScroll.set, xscrollcommand=xScroll.set)
+        self.excel_treeview.config(yscrollcommand=yScroll.set, xscrollcommand=xScroll.set)
         yScroll.pack(side="bottom", fill="x")
         xScroll.pack(side="right", fill="y")
+
         window.mainloop()
 
     def open_file(self):
@@ -73,30 +73,59 @@ class DatabaseExporter:
                 title="Open File",
                 filetypes=file_types
             )
+
             if file_path:
                 print(f"Selected file: {file_path}")
                 file_name = os.path.basename(file_path)
-                self.databaseLabel["text"] = file_name
+                self.database_label["text"] = file_name
+
                 try:
-                    filename = r"{}".format(file_name)
-                    if filename[-4:] == ".csv":
-                        df = pd.read_csv(filename)
+                    if file_name[-4:] == ".csv":
+                        df = pd.read_csv(file_path)
                     else:
-                        df = pd.read_excel(filename)
+                        df = pd.read_excel(file_path)
+
+                    # Clear the existing rows in the Treeview
+                    for item in self.excel_treeview.get_children():
+                        self.excel_treeview.delete(item)
+
+                    # Define column names based on DataFrame columns
+                    column_names = df.columns.tolist()
+                    # Set columns in Treeview
+                    self.excel_treeview["columns"] = column_names
+
+                    # Insert data into Treeview
+                    for index, row in df.iterrows():
+                        # Insert a new row in the Treeview
+                        item_id = self.excel_treeview.insert("", "end", values=tuple(row))
+
+                        # Print each row to the Treeview
+                        for i, value in enumerate(row):
+                            self.excel_treeview.set(item_id, column_names[i], value)
+
                 except ValueError:
                     messagebox.showerror("Error!", "The file you have chosen is invalid!")
                     return None
                 except FileNotFoundError:
-                    tk.messagebox.showerror("Error!", f"No such file as {file_name}")
+                    messagebox.showerror("Error!", f"No such file as {file_name}")
                     return None
             else:
                 print("No file selected.")
                 messagebox.showerror("Error!", "No file selected!")
+
         except Exception as e:
             print(f"An error occurred: {e}")
             messagebox.showerror("Error!", "An error occurred!")
 
 
 if __name__ == '__main__':
+    window = tk.Tk()
+    window.title("Search for Database")
+    window.minsize(500, 400)
+    pd.set_option('display.max_column', None)
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_seq_items', None)
+    pd.set_option('display.max_colwidth', 500)
+    pd.set_option('expand_frame_repr', True)
     exporter = DatabaseExporter()
     exporter.main()
