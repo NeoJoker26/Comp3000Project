@@ -1,131 +1,102 @@
-import sys
-import os
 import tkinter as tk
-from tkinter import filedialog, ttk, messagebox
-from  sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing import List, Optional
+from tkinter import ttk, filedialog, messagebox
 import pandas as pd
+import os
 
 
-class DatabaseExporter():
-    def __init__(self):
+class PredictionAlgorithm:
+    def __int__(self):
         pass
 
-    def main(self):
 
-        excel_frame = tk.LabelFrame(
-            window,
-            text="Excel Database"
-        )
-        excel_frame.pack(fill="both")
+class SecurityCheck:
+    def __int__(self):
+        pass
 
-        self.excel_treeview = ttk.Treeview(
-            window,
-        )
+
+class DatabaseHandler:
+    def __int__(self):
+        pass
+
+
+class GraphTheory:
+    def __int__(self):
+        pass
+
+
+class WindowMaker:
+    def __init__(self):
+        pd.set_option('display.max_column', None)  # max number of columns that pandas can pull up
+        pd.set_option('display.max_rows', None)  # max number of rows that pandas can pull up
+        pd.set_option('display.max_seq_items', None)  # removes the limit on the number of items that can be displayed
+        pd.set_option('display.max_colwidth', 500)  # sets the max pandas column width to 500 chars
+        pd.set_option('expand_frame_repr', True)  # ensures that the DF expands over a few lines
+        pd.set_option('display.precision', 10)  # sets floats to 10 dp
+        pd.set_option('display.colheader_justify', 'left')  # sets column headers to left
+
+        self.window = tk.Tk()  # creates main window called window
+        self.window.title("Search for Database")  # title of the tkinter window
+        self.window.geometry("800x600")  # the size of the tkinter window
+        self.window.minsize(800, 600)  # sets the min size of the tkinter window
+
+        self.file_path = None  # file path for file
+        self.df = None  # makes an empty dataframe until it can be used amongst the class
+
+        self.excel_frame = tk.LabelFrame(self.window, text="Excel Database")  # title for Labelframe for  treeview
+        self.excel_frame.pack(fill="both", expand=True)  #
+
+        self.excel_treeview = ttk.Treeview(self.excel_frame, columns=(), show="headings")  # creates treeview to view db
         self.excel_treeview.pack(expand=True, fill="both")
 
-        open_frame = tk.LabelFrame(
-            window,
-            text="Open File",
-            labelanchor='n'
-        )
-        open_frame.pack(expand=True, fill="both")
+        # creates the x and y scroll bars, put into frame not treeview for aesthetics
+        self.y_scroll = tk.Scrollbar(self.excel_frame, orient="vertical", command=self.excel_treeview.yview)
+        self.x_scroll = tk.Scrollbar(self.excel_frame, orient="horizontal", command=self.excel_treeview.xview)
+        self.y_scroll.pack(side="right", fill="y")
+        self.x_scroll.pack(side="bottom", fill="x")
+        self.excel_treeview.config(yscrollcommand=self.y_scroll.set, xscrollcommand=self.x_scroll.set)
 
-        add_database_button = tk.Button(
-            open_frame,
-            text="Add database",
-            command=self.open_file
-        )
-        add_database_button.pack(expand=True)
+        # creates open file title for frame for button
+        self.open_frame = tk.LabelFrame(self.window, text="Open File", labelanchor='n')
+        self.open_frame.pack(fill="both", expand=True)
 
-        self.database_label = tk.Label(
-            open_frame,
-            text="FileNaN"
-        )
+        # creates add db button
+        self.add_database_button = tk.Button(self.open_frame, text="Add database", command=self.open_file)
+        self.add_database_button.pack(expand=True)
+
+        # title for chosen file
+        self.database_label = tk.Label(self.open_frame, text="FileNaN")
         self.database_label.pack(expand=True)
 
-        xScroll = tk.Scrollbar(
-            self.excel_treeview,
-            orient="vertical",
-            command=self.excel_treeview.yview
-        )
-        yScroll = tk.Scrollbar(
-            self.excel_treeview,
-            orient="horizontal",
-            command=self.excel_treeview.xview
-        )
-        self.excel_treeview.config(yscrollcommand=yScroll.set, xscrollcommand=xScroll.set)
-        yScroll.pack(side="bottom", fill="x")
-        xScroll.pack(side="right", fill="y")
-
-        window.mainloop()
+    def main(self):
+        self.window.mainloop()  # calls tkinter window
 
     def open_file(self):
-        try:
-            file_types = (
-                ("Excel Files", "*.xlsx"),
-                ("CSV Files", "*.csv"),
-                ("All Files", "*.*")
-            )
+        file_types = (
+            ("Excel Files", "*.xlsx"),
+            ("Excel Files", "*.xls"),
+            ("CSV Files", "*.csv"),
+            ("All Files", "*.*")
+        )
 
-            file_path = filedialog.askopenfilename(
-                title="Open File",
-                filetypes=file_types
-            )
+        self.file_path = filedialog.askopenfilename(title="Open File", filetypes=file_types)
 
-            if file_path:
-                print(f"Selected file: {file_path}")
-                file_name = os.path.basename(file_path)
-                self.database_label["text"] = file_name
+        if self.file_path:
+            file_name = self.file_path
+            self.database_label["text"] = os.path.basename(file_name)
 
+            if file_name.endswith(".csv"):
                 try:
-                    if file_name[-4:] == ".csv":
-                        df = pd.read_csv(file_path)
-                    else:
-                        df = pd.read_excel(file_path)
-
-                    # Clear the existing rows in the Treeview
-                    for item in self.excel_treeview.get_children():
-                        self.excel_treeview.delete(item)
-
-                    # Define column names based on DataFrame columns
-                    column_names = df.columns.tolist()
-                    # Set columns in Treeview
-                    self.excel_treeview["columns"] = column_names
-
-                    # Insert data into Treeview
-                    for index, row in df.iterrows():
-                        # Insert a new row in the Treeview
-                        item_id = self.excel_treeview.insert("", "end", values=tuple(row))
-
-                        # Print each row to the Treeview
-                        for i, value in enumerate(row):
-                            self.excel_treeview.set(item_id, column_names[i], value)
-
-                except ValueError:
-                    messagebox.showerror("Error!", "The file you have chosen is invalid!")
-                    return None
-                except FileNotFoundError:
-                    messagebox.showerror("Error!", f"No such file as {file_name}")
-                    return None
+                    self.df = pd.read_csv(self.file_path, encoding='ISO-8859-1')
+                except:
+                    self.df = pd.read_csv(self.file_path, encoding='utf-8')
+            elif file_name.endswith(".xlsx"):
+                self.df = pd.read_excel(self.file_path)
             else:
-                print("No file selected.")
-                messagebox.showerror("Error!", "No file selected!")
-
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            messagebox.showerror("Error!", "An error occurred!")
+                messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
+        else:
+            messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
 
 
 if __name__ == '__main__':
-    window = tk.Tk()
-    window.title("Search for Database")
-    window.minsize(500, 400)
-    pd.set_option('display.max_column', None)
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_seq_items', None)
-    pd.set_option('display.max_colwidth', 500)
-    pd.set_option('expand_frame_repr', True)
-    exporter = DatabaseExporter()
+    exporter = WindowMaker()
     exporter.main()
