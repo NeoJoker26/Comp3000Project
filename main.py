@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
+import seaborn 
 import os
 
 
@@ -41,6 +42,7 @@ class WindowMaker:
 
         self.file_path = None  # file path for file
         self.df = None  # makes an empty dataframe until it can be used amongst the class
+        self.file_type = ""  # tells file type for display_data method
 
         self.excel_frame = tk.LabelFrame(self.window, text="Excel Database")  # title for Labelframe for  treeview
         self.excel_frame.pack(fill="both", expand=True)  #
@@ -85,16 +87,58 @@ class WindowMaker:
             self.database_label["text"] = os.path.basename(file_name)
 
             if file_name.endswith(".csv"):
+                encodings = ['ISO-8859-1', 'utf-8']
+                for encoding in encodings:
+                    try:
+                        self.df = pd.read_csv(self.file_path, encoding=encoding)
+                        self.file_type = "csv"  # Set self.file_type directly
+                        break
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+            elif file_name.endswith((".xlsx", ".xls")):
                 try:
-                    self.df = pd.read_csv(self.file_path, encoding='ISO-8859-1')
-                except:
-                    self.df = pd.read_csv(self.file_path, encoding='utf-8')
-            elif file_name.endswith(".xlsx"):
-                self.df = pd.read_excel(self.file_path)
+                    self.df = pd.read_excel(self.file_path)
+                    self.file_type = "excel"  # Set self.file_type directly
+                except FileNotFoundError:
+                    messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+
+            if self.file_type:
+                self.display_data(self.df, self.file_type)
             else:
                 messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
         else:
             messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
+
+    def display_data(self, df, filetype, sheet_name=None):
+        # Clear the existing columns in the Treeview
+        for column in self.excel_treeview.get_children():
+            self.excel_treeview.delete(column)
+
+        column_names = df.columns.tolist()  # Get column names
+
+        # Set columns in Treeview
+        self.excel_treeview["columns"] = column_names
+
+        # Configure column headings and set their width
+        for column in column_names:
+            self.excel_treeview.heading(column, text=column)
+            self.excel_treeview.column(column, width=150, minwidth=100)
+
+        if filetype == "csv":
+            # Insert data for a CSV file
+            for index, row in df.iterrows():
+                self.excel_treeview.insert("", "end", values=tuple(row))
+        elif filetype == "excel":
+            if sheet_name:
+                # Check if the specified sheet_name exists in the Excel file
+                if sheet_name in df.sheet_names:
+                    selected_sheet = df.parse(sheet_name)
+                    for index, row in selected_sheet.iterrows():
+                        self.excel_treeview.insert("", "end", values=tuple(row))
+                else:
+                    messagebox.showerror("Sheet Not Found", "The selected sheet is not in the Excel file.")
+            else:
+                messagebox.showerror("Sheet Name Required", "You must provide a sheet name for Excel files.")
 
 
 if __name__ == '__main__':
