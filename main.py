@@ -1,13 +1,46 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
-import seaborn 
+import seaborn as sns
 import os
+import numpy as np
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+import sqlalchemy as sa
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 
 class PredictionAlgorithm:
-    def __int__(self):
-        pass
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.file = None
+        self.columns = []
+
+    def load_data(self, df):
+        # Load data into the class
+        file = pd.read_excel('housing_price_dataset.xlsx')
+        for col in file:
+            try:
+                file[col] = pd.to_numeric(file[col])
+                self.columns.append(col)
+            except ValueError:
+                file = file.drop(col, axis=1)
+
+    def evaluate_models(self):
+        file = self.file
+        scaler = MinMaxScaler()
+        file[self.columns] = scaler.fit_transform(file[self.columns])
+        X = file[self.columns]
+        y = file['Price']
+        scaler = MinMaxScaler()
+        X = scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model = MLPRegressor(hidden_layer_sizes=(50, 25), max_iter=1000, activation='relu', random_state=42)
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_test)
+        print(predictions)
 
 
 class SecurityCheck:
@@ -16,13 +49,43 @@ class SecurityCheck:
 
 
 class DatabaseHandler:
-    def __int__(self):
+    def __init__(self):
+        postgres_url = 'postgresql://neojoker:password123@neojoker/mockdb.db'
+        # Create the engine to connect to the database
+        engine = sa.create_engine('sqlite:///houses.db')
+
+        # Create the session maker
+        Session = sessionmaker(bind=engine)
+        self.session = Session()
+
+    def start_database(self):
+        engine = create_engine
         pass
 
 
 class GraphTheory:
-    def __int__(self):
+    def __init__(self):
         pass
+
+    def visualize_square_feet_vs_price(self):
+        # Create a scatter plot of square feet vs. price
+        sns.scatterplot(x='SquareFeet', y='Price', data=self.df)
+
+    def visualize_bedrooms_vs_price(self):
+        # Create a scatter plot of bedrooms vs. price
+        sns.scatterplot(x='Bedrooms', y='Price', data=self.df)
+
+    def visualize_bathrooms_vs_price(self):
+        # Create a scatter plot of bathrooms vs. price
+        sns.scatterplot(x='Bathrooms', y='Price', data=self.df)
+
+    def visualize_neighborhood_vs_price(self):
+        # Create a bar plot of average price per neighborhood
+        sns.barplot(x='Neighborhood', y='Price', data=self.df, estimator=np.mean)
+
+    def visualize_year_built_vs_price(self):
+        # Create a box plot of price vs. year built
+        sns.boxplot(x='YearBuilt', y='Price', data=self.df)
 
 
 class WindowMaker:
@@ -69,8 +132,12 @@ class WindowMaker:
         self.database_label = tk.Label(self.open_frame, text="FileNaN")
         self.database_label.pack(expand=True)
 
+        self.selected_file_path = None
+
     def main(self):
         self.window.mainloop()  # calls tkinter window
+        handler = DatabaseHandler()
+        return self.selected_file_path
 
     def open_file(self):
         file_types = (
@@ -108,6 +175,7 @@ class WindowMaker:
                 messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
         else:
             messagebox.showerror("Unsupported File Type", "The selected file is not supported.")
+        self.selected_file_path = self.file_path
 
     def display_data(self, df, filetype, sheet_name=None):
         # Clear the existing columns in the Treeview
@@ -142,5 +210,7 @@ class WindowMaker:
 
 
 if __name__ == '__main__':
-    exporter = WindowMaker()
-    exporter.main()
+    window_maker = WindowMaker()
+    selected_file = window_maker.main()
+    if selected_file:
+        predictor = PredictionAlgorithm(selected_file)
