@@ -43,7 +43,7 @@ class PredictionAlgorithm:
         print(predictions)
 
 
-class SecurityCheck:
+class EnchanceSecurity:
     def __int__(self):
         pass
 
@@ -140,34 +140,96 @@ class WindowMaker:
         return self.selected_file_path
 
     def open_file(self):
-        file_types = (
-            ("Excel Files", "*.xlsx"),
-            ("Excel Files", "*.xls"),
-            ("CSV Files", "*.csv"),
-            ("All Files", "*.*")
-        )
+        file_types = {
+            ".csv": pd.read_csv,
+            ".xlsx": pd.read_excel,
+            ".xls": pd.read_excel,
+            ".json": pd.read_json,
+            ".parquet": pd.read_parquet,
+            ".feather": pd.read_feather,
+            ".dta": pd.read_stata,
+            ".pkl": pd.read_pickle,
+            ".sql": pd.read_sql,
+            ".html": pd.read_html,
+            ".h5": pd.read_hdf,
+        }
 
+        # Open the file using file dialog
         self.file_path = filedialog.askopenfilename(title="Open File", filetypes=file_types)
 
         if self.file_path:
             file_name = self.file_path
             self.database_label["text"] = os.path.basename(file_name)
 
-            if file_name.endswith(".csv"):
-                encodings = ['ISO-8859-1', 'utf-8']
-                for encoding in encodings:
+            # Load the data using the appropriate reader function
+            match self.file_path.split(".")[-1]:
+                case "csv":
+                    encodings = ["ISO-8859-1", "utf-8"]
+                    for encoding in encodings:
+                        try:
+                            self.df = pd.read_csv(self.file_path, encoding=encoding)
+                            self.file_type = "csv"  # Set self.file_type directly
+                            break
+                        except FileNotFoundError:
+                            messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+
+                case "xlsx" | "xls":
                     try:
-                        self.df = pd.read_csv(self.file_path, encoding=encoding)
-                        self.file_type = "csv"  # Set self.file_type directly
-                        break
+                        self.df = pd.read_excel(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
                     except FileNotFoundError:
                         messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
-            elif file_name.endswith((".xlsx", ".xls")):
-                try:
-                    self.df = pd.read_excel(self.file_path)
-                    self.file_type = "excel"  # Set self.file_type directly
-                except FileNotFoundError:
-                    messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+
+                case "json":
+                    try:
+                        self.df = pd.read_json(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+                case "parquet":
+                    try:
+                        self.df = pd.read_parquet(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+
+                case "feather":
+                    try:
+                        self.df = pd.read_feather(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+                case "dta":
+                    try:
+                        self.df = pd.read_stata(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+
+                case "pkl":
+                    try:
+                        self.df = pd.read_pickle(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+                case "sql":
+                    try:
+                        self.df = pd.read_sql(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+                case "html":
+                    try:
+                        self.df = pd.read_html(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
+                case "h5":
+                    try:
+                        self.df = pd.read_hdf(self.file_path)
+                        self.file_type = "excel"  # Set self.file_type directly
+                    except FileNotFoundError:
+                        messagebox.showerror("File Not Found", "The file is either not supported or non-existent")
 
             if self.file_type:
                 self.display_data(self.df, self.file_type)
@@ -212,5 +274,3 @@ class WindowMaker:
 if __name__ == '__main__':
     window_maker = WindowMaker()
     selected_file = window_maker.main()
-    if selected_file:
-        predictor = PredictionAlgorithm(selected_file)
