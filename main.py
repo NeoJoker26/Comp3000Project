@@ -1,21 +1,130 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import chardet
-import pyarrow as pa
 import seaborn as sns
-import os
-import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, mapped_column, Mapped, relationship, DeclarativeBase
-import csv
-from typing import Optional, List
-import psycopg2
+from database import DatabaseHandler
+
+# db_handler.create_banana(size=10, weight=100, sweetness=0.8, softness=0.6, harvest_time=2024, ripeness=0.7,
+# acidity=0.5, quality="good")
+
+
+class CRUDWindow(tk.Toplevel):
+    def __init__(self, parent, data, db_handler):
+        super().__init__(parent)
+        self.parent = parent
+        self.data = data
+        self.db_handler = db_handler
+        self.title("CRUD Operations")
+        self.geometry("800x600")
+
+        # Create buttons for CRUD operations
+        self.button_frame = tk.Frame(self)
+        self.button_frame.pack(pady=10)
+
+        create_button = tk.Button(self.button_frame, text="Create", command=self.create_entry)
+        create_button.pack(side=tk.LEFT, padx=5)
+
+        update_button = tk.Button(self.button_frame, text="Update", command=self.update_entry)
+        update_button.pack(side=tk.LEFT, padx=5)
+
+        delete_button = tk.Button(self.button_frame, text="Delete", command=self.delete_entry)
+        delete_button.pack(side=tk.LEFT, padx=5)
+
+        visualize_button = tk.Button(self.button_frame, text="Visualize", command=self.visualize_data)
+        visualize_button.pack(side=tk.LEFT, padx=5)
+
+        # Create widgets for CRUD operations
+        self.create_form_frame = None
+        self.input_fields = None
+        self.banana_data_label = None
+
+    def create_entry(self):
+        self.clear_window()
+        self.create_form_frame = tk.Frame(self)
+        self.create_form_frame.pack(pady=10)
+
+        labels = ["Size:", "Weight:", "Sweetness:", "Softness:", "Harvest Time:", "Ripeness:", "Acidity:", "Quality:"]
+        self.input_fields = []
+
+        for i, label_text in enumerate(labels):
+            label = tk.Label(self.create_form_frame, text=label_text)
+            label.grid(row=i, column=0, sticky="W")
+
+            entry = tk.Entry(self.create_form_frame)
+            entry.grid(row=i, column=1)
+            self.input_fields.append(entry)
+
+        submit_button = tk.Button(self.create_form_frame, text="Submit", command=self.submit_data)
+        submit_button.grid(row=len(labels), columnspan=2, pady=10)
+
+        back_button = tk.Button(self.create_form_frame, text="Back", command=self.clear_window)
+        back_button.grid(row=len(labels) + 1, columnspan=2, pady=10)
+
+    def submit_data(self):
+        if all(entry.get() for entry in self.input_fields):
+            values = [entry.get() for entry in self.input_fields]
+            banana_id = self.db_handler.create_banana(*values)
+            messagebox.showinfo("Success", f"New banana entry created with id: {banana_id}")
+        else:
+            messagebox.showerror("Error", "Please enter all fields.")
+
+    def update_entry(self):
+        pass
+
+    def delete_entry(self):
+        pass
+
+    def visualize_data(self):
+        # Clear the window
+        self.clear_window()
+
+        # Create a new frame to hold the read entry functionality
+        read_frame = tk.Frame(self)
+        read_frame.pack(pady=10)
+
+        # Create a label and entry widget for the Banana ID
+        banana_id_label = tk.Label(read_frame, text="Enter Banana ID:")
+        banana_id_label.grid(row=0, column=0)
+
+        banana_id_entry = tk.Entry(read_frame)
+        banana_id_entry.grid(row=0, column=1)
+
+        # Create a button to submit the Banana ID
+        submit_button = tk.Button(read_frame, text="Submit", command=lambda: self.read_entry(banana_id_entry.get()))
+        submit_button.grid(row=0, column=2, padx=5)
+
+        # Create a label to display the retrieved Banana data
+        self.banana_data_label = tk.Label(read_frame, text="")
+        self.banana_data_label.grid(row=1, columnspan=3, pady=10)
+
+        # Create a back button to return to the main CRUD window
+        back_button = tk.Button(read_frame, text="Back", command=self.clear_window)
+        back_button.grid(row=2, columnspan=3, pady=5)
+
+    def read_entry(self, banana_id):
+        if banana_id:
+            try:
+                banana_id = int(banana_id)
+                banana_data = self.db_handler.read_banana(banana_id)
+                if banana_data:
+                    banana_data_str = "\n".join([f"{key}: {value}" for key, value in banana_data.__dict__.items()])
+                    self.banana_data_label.config(text=banana_data_str)
+                else:
+                    messagebox.showerror("Error", "Failed to retrieve banana data from the database.")
+            except ValueError:
+                messagebox.showerror("Error", "Invalid Banana ID. Please enter a valid integer.")
+        else:
+            messagebox.showerror("Error", "Please enter a Banana ID.")
+
+    def clear_window(self):
+        for widget in self.winfo_children():
+            if widget != self.button_frame:
+                widget.destroy()
 
 
 class GraphTheory:
@@ -52,14 +161,42 @@ class GraphTheory:
         else:
             print("DataFrame is empty. Please load data first.")
 
+    def visualize_quality(self):
+        if self.data is not None:
+            if 'Quality' in self.data.columns:
+                quality_counts = self.data['Quality'].value_counts()
+
+                plt.figure(figsize=(6, 4))
+                quality_counts.plot(kind='bar', color=['green', 'red'])
+                plt.xlabel('Quality')
+                plt.ylabel('Frequency')
+                plt.title('Frequency of Quality')
+                plt.xticks(rotation=0)
+                plt.show()
+            else:
+                print("DataFrame does not contain a 'Quality' column.")
+        else:
+            print("DataFrame is empty. Please load data first.")
+
+    def visualize_weight_distribution(self, size_column):
+        if self.data is not None:
+            plt.figure(figsize=(8, 6))
+            sns.histplot(data=self.data, x=size_column, y='Weight', bins=20, kde=True)
+            plt.xlabel(size_column)
+            plt.ylabel('Weight')
+            plt.title(f'Weight Distribution as {size_column} Changes')
+            plt.show()
+        else:
+            print("DataFrame is empty. Please load data first.")
+
 
 class PredictionAlgorithm:
     def __init__(self):
         self.file = None
         self.columns = []
+        self.data = None
 
     def load_data(self, file):
-        # Load data into the class
         self.file = file
         for col in file:
             try:
@@ -80,99 +217,49 @@ class PredictionAlgorithm:
         model = MLPRegressor(hidden_layer_sizes=(50, 25), max_iter=1000, activation='relu', random_state=42)
         model.fit(X_train, y_train)
         predictions = model.predict(X_test)
-        print(predictions)
 
-        plt.figure(figsize=(10, 6))
-        plt.scatter(X_test, predictions, color='blue', label='Predictions')
-        plt.scatter(X_test, y_test, color='red', label='Actual')
-        plt.xlabel('Input Features')
-        plt.ylabel('Size')
-        plt.title('Actual vs Predicted Values')
-        plt.legend()
+        num_predictions_to_print = int(0.2 * len(predictions))
+        predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': predictions})
+        print(predictions_df.head(num_predictions_to_print))
+
+        plt.figure(figsize=(8, 6))
+        plt.scatter(y_test, predictions)
+        plt.xlabel('Actual Values')
+        plt.ylabel('Predicted Values')
+        plt.title('Actual vs. Predicted Values')
+        plt.grid(True)
         plt.show()
+
+        plt.figure(figsize=(8, 6))
+        sns.kdeplot(predictions, label='Predicted', fill=True)
+        plt.xlabel('Predicted Values')
+        plt.ylabel('Density')
+        plt.title('Density Plot of Predicted Values')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def visualize_quality_bar_chart(self):
+        if self.data is not None:
+            if 'Sweetness' in self.data.columns and 'Quality' in self.data.columns:
+                quality_counts = self.data.groupby('Sweetness')['Quality'].value_counts().unstack().fillna(0)
+                quality_counts.plot(kind='bar', stacked=True, color=['red', 'green'])
+
+                plt.xlabel('Sweetness')
+                plt.ylabel('Frequency')
+                plt.title('Frequency of Quality by Sweetness')
+                plt.legend(title='Quality', labels=['Bad', 'Good'])
+                plt.xticks(rotation=45)
+                plt.show()
+            else:
+                print("DataFrame is missing either 'Sweetness' or 'Quality' column.")
+        else:
+            print("DataFrame is empty. Please load data first.")
 
 
 class EnhanceSecurity:
     def __int__(self):
         pass
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class Banana(Base):
-    __tablename__ = "banana_quality"
-    banana_id: Mapped[int] = mapped_column(primary_key=True)
-    size: Mapped[float] = mapped_column(Float)
-    weight: Mapped[float] = mapped_column(Float)
-    sweetness: Mapped[float] = mapped_column(Float)
-    softness: Mapped[float] = mapped_column(Float)
-    harvest_time: Mapped[float] = mapped_column(Float)
-    ripeness: Mapped[float] = mapped_column(Float)
-    acidity: Mapped[float] = mapped_column(Float)
-    quality: Mapped[str] = mapped_column(String(5))
-
-    def __repr__(self):
-        return (
-            f"Banana(id={self.banana_id!r}, size={self.size!r}, weight={self.weight!r}, "
-            f"sweetness={self.sweetness!r}, softness={self.softness!r}, "
-            f"harvest_time={self.harvest_time!r}, ripeness={self.ripeness!r}, "
-            f"acidity={self.acidity!r}, quality={self.quality!r})"
-        )
-
-
-class DatabaseHandler:
-    engine = create_engine("postgresql://neojoker26:password123@localhost:5432/dissy", echo=True)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
-    with engine.connect() as connection:
-        result = connection.execute()
-    metadata_obj = MetaData()
-
-    def __init__(self):
-        # Create all tables in the metadata at the start
-        Base.metadata.create_all(self.engine)
-
-    def get_db(self):
-        db = self.SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    def create_banana(self, size, weight, sweetness, softness, harvest_time, ripeness, acidity, quality):
-        with self.get_db() as db:
-            banana = Banana(
-                size=size,
-                weight=weight,
-                sweetness=sweetness,
-                softness=softness,
-                harvest_time=harvest_time,
-                ripeness=ripeness,
-                acidity=acidity,
-                quality=quality
-            )
-            db.add(banana)
-            db.commit()
-
-    def read_banana(self, banana_id):
-        with self.get_db() as db:
-            banana = db.query(Banana).get(banana_id)
-            return banana
-
-    def update_banana(self, banana_id, **kwargs):
-        with self.get_db() as db:
-            banana = db.query(Banana).get(banana_id)
-            for key, value in kwargs.items():
-                setattr(banana, key, value)
-            db.commit()
-
-    def delete_banana(self, banana_id):
-        with self.get_db() as db:
-            banana = db.query(Banana).get(banana_id)
-            db.delete(banana)
-            db.commit()
 
 
 class WindowMaker:
@@ -244,7 +331,7 @@ class WindowMaker:
         self.sheet_listbox.bind('<Double-Button-1>', self.select_sheet)
 
         # Send file to other classes
-        self.handle_db = Banana()
+        self.db_handler = DatabaseHandler("postgresql://neojoker26:password123@localhost:5432/dissertation")
         self.neural_network = PredictionAlgorithm()
         self.visualise = GraphTheory()
 
@@ -271,8 +358,8 @@ class WindowMaker:
             df = pd.read_csv(self.file_path, encoding=encoding)
             self.text_box.insert(tk.END, df.to_string(index=False))
             self.data = df
-            self.handle_db.create_table("csv_data", df.columns.tolist())
-            self.handle_db.insert_data("csv_data", df)
+            # self.handle_db.create_table("csv_data", df.columns.tolist())
+            # self.handle_db.insert_data("csv_data", df)
 
             self.send_to_db_button['state'] = tk.NORMAL
             self.send_to_ml_button['state'] = tk.NORMAL
@@ -310,8 +397,9 @@ class WindowMaker:
 
     def send_to_database(self):
         if self.data is not None:
-            self.handle_db.create_table("file_data", self.data.columns.tolist())
-            self.handle_db.insert_data("file_data", self.data)
+            # Open the CRUD window
+            crud_window = CRUDWindow(self.window, self.data, self.db_handler)
+            crud_window.mainloop()
         else:
             print("No file data loaded.")
 
@@ -327,18 +415,14 @@ class WindowMaker:
             self.visualise.df = GraphTheory()
             self.visualise.df.data = self.data  # Set the data attribute in GraphTheory
             self.visualise.df.visualize_square_feet_vs_weight()
-            self.visualise.df.visualize_histogram('Size')
             self.visualise.df.visualize_histogram('Weight')
             self.visualise.df.visualize_histogram('Sweetness')
             self.visualise.df.visualize_histogram('Softness')
             self.visualise.df.visualize_histogram('HarvestTime')
             self.visualise.df.visualize_histogram('Ripeness')
             self.visualise.df.visualize_histogram('Acidity')
-            self.visualise.df.visualize_histogram('Quality')
-
-            # Example usage of visualize_line_plot
-            self.visualise.df.visualize_line_plot('Size', 'Weight')
-            self.visualise.df.visualize_line_plot('Sweetness', 'Quality')
+            self.visualise.df.visualize_quality()
+            self.visualise.df.visualize_weight_distribution('Size')
         else:
             print("No file data loaded.")
 
