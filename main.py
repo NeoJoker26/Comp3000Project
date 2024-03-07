@@ -1,3 +1,4 @@
+import hashlib
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
@@ -8,9 +9,6 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from database import DatabaseHandler
-
-# db_handler.create_banana(size=10, weight=100, sweetness=0.8, softness=0.6, harvest_time=2024, ripeness=0.7,
-# acidity=0.5, quality="good")
 
 
 class CRUDWindow(tk.Toplevel):
@@ -45,25 +43,28 @@ class CRUDWindow(tk.Toplevel):
 
     def create_entry(self):
         self.clear_window()
+
         self.create_form_frame = tk.Frame(self)
-        self.create_form_frame.pack(pady=10)
+        self.create_form_frame.pack(pady=20)
 
         labels = ["Size:", "Weight:", "Sweetness:", "Softness:", "Harvest Time:", "Ripeness:", "Acidity:", "Quality:"]
         self.input_fields = []
 
         for i, label_text in enumerate(labels):
-            label = tk.Label(self.create_form_frame, text=label_text)
-            label.grid(row=i, column=0, sticky="W")
+            label = tk.Label(self.create_form_frame, text=label_text, bg="black", fg="white")
+            label.grid(row=i, column=0, sticky="W", padx=10, pady=5)
 
-            entry = tk.Entry(self.create_form_frame)
-            entry.grid(row=i, column=1)
+            entry = tk.Entry(self.create_form_frame, bg="white")
+            entry.grid(row=i, column=1, padx=10, pady=5, ipadx=10)
             self.input_fields.append(entry)
 
-        submit_button = tk.Button(self.create_form_frame, text="Submit", command=self.submit_data)
-        submit_button.grid(row=len(labels), columnspan=2, pady=10)
+        submit_button = tk.Button(self.create_form_frame, text="Submit", command=self.submit_data, bg="green",
+                                  fg="white", relief=tk.FLAT)
+        submit_button.grid(row=len(labels), columnspan=2, pady=20, padx=10, ipadx=50)
 
-        back_button = tk.Button(self.create_form_frame, text="Back", command=self.clear_window)
-        back_button.grid(row=len(labels) + 1, columnspan=2, pady=10)
+        back_button = tk.Button(self.create_form_frame, text="Back", command=self.clear_window, bg="red", fg="white",
+                                relief=tk.FLAT)
+        back_button.grid(row=len(labels) + 1, columnspan=2, pady=10, padx=10, ipadx=50)
 
     def submit_data(self):
         if all(entry.get() for entry in self.input_fields):
@@ -74,35 +75,128 @@ class CRUDWindow(tk.Toplevel):
             messagebox.showerror("Error", "Please enter all fields.")
 
     def update_entry(self):
-        pass
-
-    def delete_entry(self):
-        pass
-
-    def visualize_data(self):
-        # Clear the window
         self.clear_window()
 
-        # Create a new frame to hold the read entry functionality
+        update_frame = tk.Frame(self)
+        update_frame.pack(pady=10)
+
+        banana_id_label = tk.Label(update_frame, text="Enter Banana ID:")
+        banana_id_label.pack(side=tk.LEFT)
+
+        banana_id_entry = tk.Entry(update_frame)
+        banana_id_entry.pack(side=tk.LEFT)
+
+        submit_button = tk.Button(update_frame, text="Submit",
+                                  command=lambda: self.show_update_form(banana_id_entry.get()))
+        submit_button.pack(side=tk.LEFT, padx=5)
+
+        back_button = tk.Button(update_frame, text="Back", command=self.clear_window)
+        back_button.pack(side=tk.LEFT, padx=5)
+
+    def show_update_form(self, banana_id):
+        if banana_id:
+            try:
+                banana_id = int(banana_id)
+                banana_data = self.db_handler.read_banana(banana_id)
+                if banana_data:
+                    self.clear_window()
+                    update_form_frame = tk.Frame(self)
+                    update_form_frame.pack(pady=10)
+
+                    labels = ["Size:", "Weight:", "Sweetness:", "Softness:", "Harvest Time:", "Ripeness:", "Acidity:",
+                              "Quality:"]
+                    self.update_fields = []
+
+                    for i, label_text in enumerate(labels):
+                        label = tk.Label(update_form_frame, text=label_text)
+                        label.grid(row=i, column=0, sticky="W")
+                        entry = tk.Entry(update_form_frame)
+                        entry.grid(row=i, column=1)
+                        entry.insert(0, getattr(banana_data, labels[i].lower().replace(":", "").replace(" ", "_")))
+                        self.update_fields.append(entry)
+
+                    update_button = tk.Button(update_form_frame, text="Update",
+                                              command=lambda: self.update_banana(banana_id))
+                    update_button.grid(row=len(labels), columnspan=2, pady=10)
+
+                    back_button = tk.Button(update_form_frame, text="Back", command=self.clear_window)
+                    back_button.grid(row=len(labels) + 1, columnspan=2, pady=10)
+                else:
+                    messagebox.showerror("Error", "Failed to retrieve banana data from the database.")
+            except ValueError:
+                messagebox.showerror("Error", "Invalid Banana ID. Please enter a valid integer.")
+        else:
+            messagebox.showerror("Error", "Please enter a Banana ID.")
+
+    def update_banana(self, banana_id):
+        values = [entry.get() for entry in self.update_fields]
+        banana_data = {
+            "size": float(values[0]),
+            "weight": float(values[1]),
+            "sweetness": float(values[2]),
+            "softness": float(values[3]),
+            "harvest_time": float(values[4]),
+            "ripeness": float(values[5]),
+            "acidity": float(values[6]),
+            "quality": values[7]
+        }
+        updated_banana = self.db_handler.update_banana(banana_id, **banana_data)
+        if updated_banana:
+            messagebox.showinfo("Success", "Banana data updated successfully.")
+        else:
+            messagebox.showerror("Error", "Failed to update banana data in the database.")
+
+    def delete_entry(self):
+        self.clear_window()
+
+        delete_frame = tk.Frame(self)
+        delete_frame.pack(pady=10)
+
+        banana_id_label = tk.Label(delete_frame, text="Enter Banana ID:")
+        banana_id_label.pack(side=tk.LEFT)
+
+        banana_id_entry = tk.Entry(delete_frame)
+        banana_id_entry.pack(side=tk.LEFT)
+
+        submit_button = tk.Button(delete_frame, text="Delete",
+                                  command=lambda: self.delete_banana(banana_id_entry.get()))
+        submit_button.pack(side=tk.LEFT, padx=5)
+
+        back_button = tk.Button(delete_frame, text="Back", command=self.clear_window)
+        back_button.pack(side=tk.LEFT, padx=5)
+
+    def delete_banana(self, banana_id):
+        if banana_id:
+            try:
+                banana_id = int(banana_id)
+                success = self.db_handler.delete_banana(banana_id)
+                if success:
+                    messagebox.showinfo("Success", "Banana data deleted successfully.")
+                else:
+                    messagebox.showerror("Error", "Failed to delete banana data from the database.")
+            except ValueError:
+                messagebox.showerror("Error", "Invalid Banana ID. Please enter a valid integer.")
+        else:
+            messagebox.showerror("Error", "Please enter a Banana ID.")
+
+    def visualize_data(self):
+        self.clear_window()
+
         read_frame = tk.Frame(self)
         read_frame.pack(pady=10)
 
-        # Create a label and entry widget for the Banana ID
         banana_id_label = tk.Label(read_frame, text="Enter Banana ID:")
         banana_id_label.grid(row=0, column=0)
 
         banana_id_entry = tk.Entry(read_frame)
         banana_id_entry.grid(row=0, column=1)
 
-        # Create a button to submit the Banana ID
         submit_button = tk.Button(read_frame, text="Submit", command=lambda: self.read_entry(banana_id_entry.get()))
         submit_button.grid(row=0, column=2, padx=5)
 
-        # Create a label to display the retrieved Banana data
         self.banana_data_label = tk.Label(read_frame, text="")
         self.banana_data_label.grid(row=1, columnspan=3, pady=10)
 
-        # Create a back button to return to the main CRUD window
         back_button = tk.Button(read_frame, text="Back", command=self.clear_window)
         back_button.grid(row=2, columnspan=3, pady=5)
 
@@ -165,7 +259,6 @@ class GraphTheory:
         if self.data is not None:
             if 'Quality' in self.data.columns:
                 quality_counts = self.data['Quality'].value_counts()
-
                 plt.figure(figsize=(6, 4))
                 quality_counts.plot(kind='bar', color=['green', 'red'])
                 plt.xlabel('Quality')
@@ -260,6 +353,10 @@ class PredictionAlgorithm:
 class EnhanceSecurity:
     def __int__(self):
         pass
+
+    def hash_password(self, password):
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        return hashed_password
 
 
 class WindowMaker:
@@ -358,9 +455,6 @@ class WindowMaker:
             df = pd.read_csv(self.file_path, encoding=encoding)
             self.text_box.insert(tk.END, df.to_string(index=False))
             self.data = df
-            # self.handle_db.create_table("csv_data", df.columns.tolist())
-            # self.handle_db.insert_data("csv_data", df)
-
             self.send_to_db_button['state'] = tk.NORMAL
             self.send_to_ml_button['state'] = tk.NORMAL
             self.visualize_button['state'] = tk.NORMAL
@@ -397,7 +491,6 @@ class WindowMaker:
 
     def send_to_database(self):
         if self.data is not None:
-            # Open the CRUD window
             crud_window = CRUDWindow(self.window, self.data, self.db_handler)
             crud_window.mainloop()
         else:
