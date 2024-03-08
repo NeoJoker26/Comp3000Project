@@ -1,4 +1,3 @@
-import hashlib
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
@@ -20,23 +19,25 @@ class CRUDWindow(tk.Toplevel):
         self.title("CRUD Operations")
         self.geometry("800x600")
 
-        # Create buttons for CRUD operations
         self.button_frame = tk.Frame(self)
-        self.button_frame.pack(pady=10)
+        self.button_frame.pack(pady=20)
 
-        create_button = tk.Button(self.button_frame, text="Create", command=self.create_entry)
-        create_button.pack(side=tk.LEFT, padx=5)
+        create_button = tk.Button(self.button_frame, text="Create", command=self.create_entry, padx=15, pady=5,
+                                  font=("Helvetica", 12))
+        create_button.pack(side=tk.LEFT)
 
-        update_button = tk.Button(self.button_frame, text="Update", command=self.update_entry)
-        update_button.pack(side=tk.LEFT, padx=5)
+        update_button = tk.Button(self.button_frame, text="Update", command=self.update_entry, padx=15, pady=5,
+                                  font=("Helvetica", 12))
+        update_button.pack(side=tk.LEFT)
 
-        delete_button = tk.Button(self.button_frame, text="Delete", command=self.delete_entry)
-        delete_button.pack(side=tk.LEFT, padx=5)
+        delete_button = tk.Button(self.button_frame, text="Delete", command=self.delete_entry, padx=15, pady=5,
+                                  font=("Helvetica", 12))
+        delete_button.pack(side=tk.LEFT)
 
-        visualize_button = tk.Button(self.button_frame, text="Visualize", command=self.visualize_data)
-        visualize_button.pack(side=tk.LEFT, padx=5)
+        visualize_button = tk.Button(self.button_frame, text="Visualize", command=self.visualize_data, padx=15, pady=5,
+                                     font=("Helvetica", 12))
+        visualize_button.pack(side=tk.LEFT)
 
-        # Create widgets for CRUD operations
         self.create_form_frame = None
         self.input_fields = None
         self.banana_data_label = None
@@ -51,20 +52,20 @@ class CRUDWindow(tk.Toplevel):
         self.input_fields = []
 
         for i, label_text in enumerate(labels):
-            label = tk.Label(self.create_form_frame, text=label_text, bg="black", fg="white")
-            label.grid(row=i, column=0, sticky="W", padx=10, pady=5)
+            label = tk.Label(self.create_form_frame, text=label_text, fg="black", font=("Helvetica", 12))
+            label.grid(row=i, column=0, sticky="W", padx=10, pady=8)
 
-            entry = tk.Entry(self.create_form_frame, bg="white")
-            entry.grid(row=i, column=1, padx=10, pady=5, ipadx=10)
+            entry = tk.Entry(self.create_form_frame, bg="white", font=("Helvetica", 12), bd=3, relief=tk.SOLID)
+            entry.grid(row=i, column=1, padx=10, pady=8, ipadx=10, sticky="ew")
             self.input_fields.append(entry)
 
-        submit_button = tk.Button(self.create_form_frame, text="Submit", command=self.submit_data, bg="green",
-                                  fg="white", relief=tk.FLAT)
-        submit_button.grid(row=len(labels), columnspan=2, pady=20, padx=10, ipadx=50)
+        confirm_button = tk.Button(self.create_form_frame, text="Confirm", command=self.submit_data, bg="green",
+                                   fg="white", relief=tk.FLAT, font=("Helvetica", 12))
+        confirm_button.grid(row=len(labels), column=0, columnspan=2, pady=20, padx=10, ipadx=50, sticky="ew")
 
         back_button = tk.Button(self.create_form_frame, text="Back", command=self.clear_window, bg="red", fg="white",
-                                relief=tk.FLAT)
-        back_button.grid(row=len(labels) + 1, columnspan=2, pady=10, padx=10, ipadx=50)
+                                relief=tk.FLAT, font=("Helvetica", 12))
+        back_button.grid(row=len(labels) + 1, column=0, columnspan=2, pady=10, padx=10, ipadx=50, sticky="ew")
 
     def submit_data(self):
         if all(entry.get() for entry in self.input_fields):
@@ -80,18 +81,22 @@ class CRUDWindow(tk.Toplevel):
         update_frame = tk.Frame(self)
         update_frame.pack(pady=10)
 
-        banana_id_label = tk.Label(update_frame, text="Enter Banana ID:")
-        banana_id_label.pack(side=tk.LEFT)
+        font_style = ("Helvetica", 12)
 
-        banana_id_entry = tk.Entry(update_frame)
-        banana_id_entry.pack(side=tk.LEFT)
+        banana_id_label = tk.Label(update_frame, text="Enter Banana ID:", font=font_style)
+        banana_id_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
-        submit_button = tk.Button(update_frame, text="Submit",
-                                  command=lambda: self.show_update_form(banana_id_entry.get()))
-        submit_button.pack(side=tk.LEFT, padx=5)
+        banana_id_entry = tk.Entry(update_frame, font=font_style)
+        banana_id_entry.grid(row=0, column=1, padx=10, pady=10)
 
-        back_button = tk.Button(update_frame, text="Back", command=self.clear_window)
-        back_button.pack(side=tk.LEFT, padx=5)
+        confirm_button = tk.Button(update_frame, text="Confirm",
+                                   command=lambda: self.show_update_form(banana_id_entry.get()),
+                                   bg="green", fg="white", relief=tk.FLAT, font=font_style, padx=15, pady=5)
+        confirm_button.grid(row=1, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
+
+        back_button = tk.Button(update_frame, text="Back", command=self.clear_window, bg="red", fg="white",
+                                relief=tk.FLAT, font=font_style, padx=15, pady=5)
+        back_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="ew")
 
     def show_update_form(self, banana_id):
         if banana_id:
@@ -103,23 +108,28 @@ class CRUDWindow(tk.Toplevel):
                     update_form_frame = tk.Frame(self)
                     update_form_frame.pack(pady=10)
 
+                    font_style = ("Helvetica", 12)
+
                     labels = ["Size:", "Weight:", "Sweetness:", "Softness:", "Harvest Time:", "Ripeness:", "Acidity:",
                               "Quality:"]
                     self.update_fields = []
 
                     for i, label_text in enumerate(labels):
-                        label = tk.Label(update_form_frame, text=label_text)
+                        label = tk.Label(update_form_frame, text=label_text, font=font_style)
                         label.grid(row=i, column=0, sticky="W")
-                        entry = tk.Entry(update_form_frame)
+                        entry = tk.Entry(update_form_frame, font=font_style)
                         entry.grid(row=i, column=1)
                         entry.insert(0, getattr(banana_data, labels[i].lower().replace(":", "").replace(" ", "_")))
                         self.update_fields.append(entry)
 
                     update_button = tk.Button(update_form_frame, text="Update",
-                                              command=lambda: self.update_banana(banana_id))
+                                              command=lambda: self.update_banana(banana_id), bg="green", fg="white",
+                                              relief=tk.FLAT, font=font_style, padx=15, pady=5)
                     update_button.grid(row=len(labels), columnspan=2, pady=10)
 
-                    back_button = tk.Button(update_form_frame, text="Back", command=self.clear_window)
+                    back_button = tk.Button(update_form_frame, text="Back", command=self.clear_window, bg="red",
+                                            fg="white",
+                                            relief=tk.FLAT, font=font_style, padx=15, pady=5)
                     back_button.grid(row=len(labels) + 1, columnspan=2, pady=10)
                 else:
                     messagebox.showerror("Error", "Failed to retrieve banana data from the database.")
@@ -152,17 +162,21 @@ class CRUDWindow(tk.Toplevel):
         delete_frame = tk.Frame(self)
         delete_frame.pack(pady=10)
 
-        banana_id_label = tk.Label(delete_frame, text="Enter Banana ID:")
+        font_style = ("Helvetica", 12)
+
+        banana_id_label = tk.Label(delete_frame, text="Enter Banana ID:", font=font_style)
         banana_id_label.pack(side=tk.LEFT)
 
-        banana_id_entry = tk.Entry(delete_frame)
+        banana_id_entry = tk.Entry(delete_frame, font=font_style)
         banana_id_entry.pack(side=tk.LEFT)
 
         submit_button = tk.Button(delete_frame, text="Delete",
-                                  command=lambda: self.delete_banana(banana_id_entry.get()))
+                                  command=lambda: self.delete_banana(banana_id_entry.get()), bg="green", fg="white",
+                                  relief=tk.FLAT, font=font_style, padx=15, pady=5)
         submit_button.pack(side=tk.LEFT, padx=5)
 
-        back_button = tk.Button(delete_frame, text="Back", command=self.clear_window)
+        back_button = tk.Button(delete_frame, text="Back", command=self.clear_window, bg="red", fg="white",
+                                relief=tk.FLAT, font=font_style, padx=15, pady=5)
         back_button.pack(side=tk.LEFT, padx=5)
 
     def delete_banana(self, banana_id):
@@ -185,19 +199,23 @@ class CRUDWindow(tk.Toplevel):
         read_frame = tk.Frame(self)
         read_frame.pack(pady=10)
 
-        banana_id_label = tk.Label(read_frame, text="Enter Banana ID:")
+        font_style = ("Helvetica", 12)
+
+        banana_id_label = tk.Label(read_frame, text="Enter Banana ID:", font=font_style)
         banana_id_label.grid(row=0, column=0)
 
-        banana_id_entry = tk.Entry(read_frame)
+        banana_id_entry = tk.Entry(read_frame, font=font_style)
         banana_id_entry.grid(row=0, column=1)
 
-        submit_button = tk.Button(read_frame, text="Submit", command=lambda: self.read_entry(banana_id_entry.get()))
+        submit_button = tk.Button(read_frame, text="Submit", command=lambda: self.read_entry(banana_id_entry.get()),
+                                  bg="green", fg="white", relief=tk.FLAT, font=font_style, padx=15, pady=5)
         submit_button.grid(row=0, column=2, padx=5)
 
-        self.banana_data_label = tk.Label(read_frame, text="")
+        self.banana_data_label = tk.Label(read_frame, text="", font=font_style)
         self.banana_data_label.grid(row=1, columnspan=3, pady=10)
 
-        back_button = tk.Button(read_frame, text="Back", command=self.clear_window)
+        back_button = tk.Button(read_frame, text="Back", command=self.clear_window, bg="red", fg="white",
+                                relief=tk.FLAT, font=font_style, padx=15, pady=5)
         back_button.grid(row=2, columnspan=3, pady=5)
 
     def read_entry(self, banana_id):
@@ -224,16 +242,6 @@ class CRUDWindow(tk.Toplevel):
 class GraphTheory:
     def __init__(self, data=None):
         self.data = data
-
-    def visualize_square_feet_vs_weight(self):
-        if self.data is not None:
-            sns.scatterplot(x='Size', y='Weight', data=self.data)
-            plt.xlabel('Size')
-            plt.ylabel('Weight')
-            plt.title('Size vs Weight')
-            plt.show()
-        else:
-            print("DataFrame is empty. Please load data first.")
 
     def visualize_histogram(self, column):
         if self.data is not None:
@@ -273,11 +281,52 @@ class GraphTheory:
 
     def visualize_weight_distribution(self, size_column):
         if self.data is not None:
+            sns.set_style("whitegrid")
+            plt.figure(figsize=(10, 6))
+            sns.histplot(data=self.data, x=size_column, y='Weight', bins=20, kde=True, color='skyblue')
+            plt.xlabel(size_column, fontsize=14)
+            plt.ylabel('Weight', fontsize=14)
+            plt.title(f'Weight Distribution as {size_column} Changes', fontsize=16)
+            plt.grid(True)
+            plt.show()
+        else:
+            print("DataFrame is empty. Please load data first.")
+
+    def visualize_pairplot(self):
+        if self.data is not None:
+            sns.pairplot(self.data)
+            plt.show()
+        else:
+            print("DataFrame is empty. Please load data first.")
+
+    def visualize_correlation_heatmap(self):
+        if self.data is not None:
+            data_copy = self.data.copy()
+            if 'Quality' in data_copy.columns:
+                data_copy['Quality'] = data_copy['Quality'].map({'Good': 1, 'Bad': 0})
+
             plt.figure(figsize=(8, 6))
-            sns.histplot(data=self.data, x=size_column, y='Weight', bins=20, kde=True)
-            plt.xlabel(size_column)
-            plt.ylabel('Weight')
-            plt.title(f'Weight Distribution as {size_column} Changes')
+            sns.heatmap(data_copy.corr(), annot=True, cmap='coolwarm')
+            plt.title('Correlation Heatmap')
+            plt.show()
+        else:
+            print("DataFrame is empty. Please load data first.")
+
+    def visualize_box_plot(self, column):
+        if self.data is not None:
+            plt.figure(figsize=(8, 6))
+            sns.boxplot(data=self.data, x='Quality', y=column)
+            plt.xlabel('Quality')
+            plt.ylabel(column)
+            plt.title(f'Box Plot of {column} by Quality')
+            plt.show()
+        else:
+            print("DataFrame is empty. Please load data first.")
+
+    def visualize_scatter_matrix(self):
+        if self.data is not None:
+            sns.set(style="ticks")
+            sns.pairplot(self.data, diag_kind="kde")
             plt.show()
         else:
             print("DataFrame is empty. Please load data first.")
@@ -348,15 +397,6 @@ class PredictionAlgorithm:
                 print("DataFrame is missing either 'Sweetness' or 'Quality' column.")
         else:
             print("DataFrame is empty. Please load data first.")
-
-
-class EnhanceSecurity:
-    def __int__(self):
-        pass
-
-    def hash_password(self, password):
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        return hashed_password
 
 
 class WindowMaker:
@@ -505,17 +545,20 @@ class WindowMaker:
 
     def visualize_data(self):
         if self.data is not None:
-            self.visualise.df = GraphTheory()
-            self.visualise.df.data = self.data  # Set the data attribute in GraphTheory
-            self.visualise.df.visualize_square_feet_vs_weight()
-            self.visualise.df.visualize_histogram('Weight')
-            self.visualise.df.visualize_histogram('Sweetness')
-            self.visualise.df.visualize_histogram('Softness')
-            self.visualise.df.visualize_histogram('HarvestTime')
-            self.visualise.df.visualize_histogram('Ripeness')
-            self.visualise.df.visualize_histogram('Acidity')
-            self.visualise.df.visualize_quality()
-            self.visualise.df.visualize_weight_distribution('Size')
+            self.visualise_df = GraphTheory()
+            self.visualise_df.data = self.data  # Set the data attribute in GraphTheory
+            self.visualise_df.visualize_histogram('Weight')
+            self.visualise_df.visualize_histogram('Sweetness')
+            self.visualise_df.visualize_histogram('Softness')
+            self.visualise_df.visualize_histogram('HarvestTime')
+            self.visualise_df.visualize_histogram('Ripeness')
+            self.visualise_df.visualize_histogram('Acidity')
+            self.visualise_df.visualize_quality()
+            self.visualise_df.visualize_weight_distribution('Size')
+            self.visualise_df.visualize_pairplot()
+            self.visualise_df.visualize_correlation_heatmap()
+            self.visualise_df.visualize_box_plot('Weight')
+            self.visualise_df.visualize_scatter_matrix()
         else:
             print("No file data loaded.")
 
