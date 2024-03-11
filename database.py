@@ -5,7 +5,8 @@ from models import Banana
 
 Base = declarative_base()
 
-
+# this is where all the crud happens, i initialise the db with the url, i then have the option to call on the CRUD
+# with main.py from models
 class DatabaseHandler:
     def __init__(self, db_url):
         self.engine = create_engine(db_url, echo=True)

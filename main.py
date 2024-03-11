@@ -16,41 +16,54 @@ class CRUDWindow(tk.Toplevel):
         self.parent = parent
         self.data = data
         self.db_handler = db_handler
+
+        # Set window title and size
         self.title("CRUD Operations")
         self.geometry("800x600")
 
+        # Frame for buttons
         self.button_frame = tk.Frame(self)
         self.button_frame.pack(pady=20)
 
+        # Create button
         create_button = tk.Button(self.button_frame, text="Create", command=self.create_entry, padx=15, pady=5,
                                   font=("Helvetica", 12))
         create_button.pack(side=tk.LEFT)
 
+        # Update button
         update_button = tk.Button(self.button_frame, text="Update", command=self.update_entry, padx=15, pady=5,
                                   font=("Helvetica", 12))
         update_button.pack(side=tk.LEFT)
 
+        # Delete button
         delete_button = tk.Button(self.button_frame, text="Delete", command=self.delete_entry, padx=15, pady=5,
                                   font=("Helvetica", 12))
         delete_button.pack(side=tk.LEFT)
 
+        # Visualize button
         visualize_button = tk.Button(self.button_frame, text="Visualize", command=self.visualize_data, padx=15, pady=5,
                                      font=("Helvetica", 12))
         visualize_button.pack(side=tk.LEFT)
 
+        # Variables for form frame and input fields
         self.create_form_frame = None
         self.input_fields = None
         self.banana_data_label = None
 
     def create_entry(self):
+        # calls to destroy the window, sounds more pleasant than read
         self.clear_window()
 
+        # frame for the entry form
         self.create_form_frame = tk.Frame(self)
         self.create_form_frame.pack(pady=20)
 
+        # Labels for the entry form fields as a "concept", this could be anything, it could be a bunch of labels for
+        # a dog food company etc
         labels = ["Size:", "Weight:", "Sweetness:", "Softness:", "Harvest Time:", "Ripeness:", "Acidity:", "Quality:"]
         self.input_fields = []
 
+        # Create label and entry fields for each label
         for i, label_text in enumerate(labels):
             label = tk.Label(self.create_form_frame, text=label_text, fg="black", font=("Helvetica", 12))
             label.grid(row=i, column=0, sticky="W", padx=10, pady=8)
@@ -59,51 +72,70 @@ class CRUDWindow(tk.Toplevel):
             entry.grid(row=i, column=1, padx=10, pady=8, ipadx=10, sticky="ew")
             self.input_fields.append(entry)
 
+        # Confirm button to submit data
         confirm_button = tk.Button(self.create_form_frame, text="Confirm", command=self.submit_data, bg="green",
                                    fg="white", relief=tk.FLAT, font=("Helvetica", 12))
         confirm_button.grid(row=len(labels), column=0, columnspan=2, pady=20, padx=10, ipadx=50, sticky="ew")
 
+        # Back button
         back_button = tk.Button(self.create_form_frame, text="Back", command=self.clear_window, bg="red", fg="white",
                                 relief=tk.FLAT, font=("Helvetica", 12))
         back_button.grid(row=len(labels) + 1, column=0, columnspan=2, pady=10, padx=10, ipadx=50, sticky="ew")
 
     def submit_data(self):
+        # Check if all input fields are filled
         if all(entry.get() for entry in self.input_fields):
             values = [entry.get() for entry in self.input_fields]
+            # Create new banana in the db
             banana_id = self.db_handler.create_banana(*values)
+            # added "professional" messages to handle the errors
             messagebox.showinfo("Success", f"New banana entry created with id: {banana_id}")
         else:
             messagebox.showerror("Error", "Please enter all fields.")
 
     def update_entry(self):
+        # Clear the window before updating
         self.clear_window()
 
+        # Create a frame for updating
         update_frame = tk.Frame(self)
         update_frame.pack(pady=10)
 
+        # experimenting with different style of using fonts, tempted to make this a self.font and then use that for
+        # every font in the CRUD class
         font_style = ("Helvetica", 12)
 
+        # Label and entry for the banana ID, this is probably the best way i can think of to make this gui,
+        # manual entering instead of searching through an index, this db has 8000 + my own creations but imagine
+        # scrolling through a million, of even more, i will also want to add a feature that searches for the other
+        # criteria but for now this is the only concept i have
         banana_id_label = tk.Label(update_frame, text="Enter Banana ID:", font=font_style)
         banana_id_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
         banana_id_entry = tk.Entry(update_frame, font=font_style)
         banana_id_entry.grid(row=0, column=1, padx=10, pady=10)
 
+        # Confirm button
         confirm_button = tk.Button(update_frame, text="Confirm",
                                    command=lambda: self.show_update_form(banana_id_entry.get()),
                                    bg="green", fg="white", relief=tk.FLAT, font=font_style, padx=15, pady=5)
         confirm_button.grid(row=1, column=0, columnspan=2, pady=20, padx=10, sticky="ew")
 
+        # Back button
         back_button = tk.Button(update_frame, text="Back", command=self.clear_window, bg="red", fg="white",
                                 relief=tk.FLAT, font=font_style, padx=15, pady=5)
         back_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="ew")
 
     def show_update_form(self, banana_id):
+        # Check if the banana ID is provided
         if banana_id:
             try:
+                # Convert the provided banana ID to an integer
                 banana_id = int(banana_id)
+                # Retrieve banana data from the database based on the provided ID
                 banana_data = self.db_handler.read_banana(banana_id)
                 if banana_data:
+                    # Clear the window before showing the update form
                     self.clear_window()
                     update_form_frame = tk.Frame(self)
                     update_form_frame.pack(pady=10)
@@ -119,17 +151,19 @@ class CRUDWindow(tk.Toplevel):
                         label.grid(row=i, column=0, sticky="W")
                         entry = tk.Entry(update_form_frame, font=font_style)
                         entry.grid(row=i, column=1)
+                        # Populate entry fields with existing data
                         entry.insert(0, getattr(banana_data, labels[i].lower().replace(":", "").replace(" ", "_")))
                         self.update_fields.append(entry)
 
+                    # update button
                     update_button = tk.Button(update_form_frame, text="Update",
                                               command=lambda: self.update_banana(banana_id), bg="green", fg="white",
                                               relief=tk.FLAT, font=font_style, padx=15, pady=5)
                     update_button.grid(row=len(labels), columnspan=2, pady=10)
 
+                    # back button
                     back_button = tk.Button(update_form_frame, text="Back", command=self.clear_window, bg="red",
-                                            fg="white",
-                                            relief=tk.FLAT, font=font_style, padx=15, pady=5)
+                                            fg="white", relief=tk.FLAT, font=font_style, padx=15, pady=5)
                     back_button.grid(row=len(labels) + 1, columnspan=2, pady=10)
                 else:
                     messagebox.showerror("Error", "Failed to retrieve banana data from the database.")
@@ -139,7 +173,9 @@ class CRUDWindow(tk.Toplevel):
             messagebox.showerror("Error", "Please enter a Banana ID.")
 
     def update_banana(self, banana_id):
+        # Get values from update fields
         values = [entry.get() for entry in self.update_fields]
+        # Prepare banana data dictionary
         banana_data = {
             "size": float(values[0]),
             "weight": float(values[1]),
@@ -150,12 +186,14 @@ class CRUDWindow(tk.Toplevel):
             "acidity": float(values[6]),
             "quality": values[7]
         }
+        # finally, update said banana
         updated_banana = self.db_handler.update_banana(banana_id, **banana_data)
         if updated_banana:
             messagebox.showinfo("Success", "Banana data updated successfully.")
         else:
             messagebox.showerror("Error", "Failed to update banana data in the database.")
 
+    # self explantatory, delete banana (or concept field)
     def delete_entry(self):
         self.clear_window()
 
@@ -193,6 +231,8 @@ class CRUDWindow(tk.Toplevel):
         else:
             messagebox.showerror("Error", "Please enter a Banana ID.")
 
+    # this is a bit funky as it will show the _sa_ instance state too but i would like to keep that just incase there
+    # is an error, also shows everything in a list
     def visualize_data(self):
         self.clear_window()
 
@@ -239,6 +279,11 @@ class CRUDWindow(tk.Toplevel):
                 widget.destroy()
 
 
+# this function is created to show different types of relationships that the csv file may have, it creates histograms
+# based of the input, makes a heatmap, pairplot and more can be made however, i limited it to just these to 1) not
+# overwhelm the person but 2) as a potential change, i could make a new child GUI, put buttons in and make it create
+# different graphs based of different inputs e.g. if i want a bar chart of x and y, the user would be able to select
+# that from the file and print it with a button, but this is just a concept for the time being
 class GraphTheory:
     def __init__(self, data=None):
         self.data = data
@@ -338,6 +383,7 @@ class PredictionAlgorithm:
         self.columns = []
         self.data = None
 
+    # loading and pre processing the columns
     def load_data(self, file):
         self.file = file
         for col in file:
@@ -347,6 +393,8 @@ class PredictionAlgorithm:
             except ValueError:
                 file = file.drop(col, axis=1)
 
+    # where the magic happens, the csv file is evaluated with the MLPRegressor model (neural network) and it shows
+    # the next 20% predictions with graphs, this is tested at 97-98% accuracy
     def evaluate_models(self):
         file = self.file
         scaler = MinMaxScaler()
@@ -398,7 +446,10 @@ class PredictionAlgorithm:
         else:
             print("DataFrame is empty. Please load data first.")
 
-
+# this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
+# for the buttons are in modular functions, it took a while to design a good gui as i used a treeview at first but
+# then i realised how laggy it was and how awful the scroll bars were so i removed it and just left it as a label,
+# in theory i couldve used a decorator or some sort of inbuilt function but for ease for slower systems, i used a label
 class WindowMaker:
     def __init__(self):
         # Configure pandas display options
