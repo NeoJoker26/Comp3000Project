@@ -8,3 +8,4 @@ scikit-learn
 paramiko
 pytest
 pyarrow
+chardet
