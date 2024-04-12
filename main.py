@@ -1,12 +1,14 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
+import pyarrow as py
 import chardet
 import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+import psycopg2
 from database import DatabaseHandler
 
 
@@ -408,7 +410,7 @@ class PredictionAlgorithm:
         model.fit(X_train, y_train)
         predictions = model.predict(X_test)
 
-        num_predictions_to_print = int(0.2 * len(predictions))
+        num_predictions_to_print = int(0.2 * len(predictions)) # add user control
         predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': predictions})
         print(predictions_df.head(num_predictions_to_print))
 
