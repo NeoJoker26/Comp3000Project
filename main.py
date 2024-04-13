@@ -182,8 +182,10 @@ class CRUDWindow(tk.Toplevel):
 
     def update_banana(self, banana_id):
         # Get values from update fields
+
         values = [entry.get() for entry in self.update_fields]
         # Prepare banana data dictionary
+
         banana_data = {
             "size": float(values[0]),
             "weight": float(values[1]),
@@ -391,8 +393,7 @@ class PredictionAlgorithm:
         self.columns = []
         self.data = None
 
-    # loading and pre processing the columns
-
+    # loading and pre-processing the columns
     def load_data(self, file):
         self.file = file
         for col in file:
@@ -410,7 +411,6 @@ class PredictionAlgorithm:
         file[self.columns] = scaler.fit_transform(file[self.columns])
         X = file[self.columns]
         y = file['Size']
-        scaler = MinMaxScaler()
         X = scaler.fit_transform(X)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         model = MLPRegressor(hidden_layer_sizes=(50, 25), max_iter=1000, activation='relu', random_state=42)
@@ -533,7 +533,7 @@ class WindowMaker:
         self.neural_network = PredictionAlgorithm()
         self.visualise = GraphTheory()
 
-        #
+        # Event object for threading
         self.stop_event = threading.Event()
 
     def main(self):
@@ -547,7 +547,7 @@ class WindowMaker:
         stats_thread.join()
 
     def display_stats(self):
-        while not self.stop_event.is_set():
+        if not self.stop_event.is_set():
             if tracemalloc.is_tracing():
                 snapshot = tracemalloc.take_snapshot()
                 for stat in snapshot.statistics('lineno'):
@@ -556,24 +556,34 @@ class WindowMaker:
                 print("tracemalloc is not tracing memory allocations.")
 
             cpu_percent = psutil.cpu_percent(interval=None)
-            memory = psutil.virtual_memory()
-            memory_percent = memory.percent
+            memory = tracemalloc.get_traced_memory()[1] / (1024 * 1024)
+            memory_percent = memory / psutil.virtual_memory().total * 100
 
             print(f"CPU Utilization: {cpu_percent}%")
             print(f"Memory Utilization: {memory_percent}%")
 
-            time.sleep(15)
+            self.window.after(15000, self.display_stats)
 
     def open_file(self):
-        self.file_path = filedialog.askopenfilename(filetypes=[
-            ("CSV Files", "*.csv"),
-            ("Excel Files", "*.xlsx *.xls"),
-            ("All Files", "*.*")
-        ])
-        if self.file_path and self.file_path.endswith(".csv"):
-            self.parse_csv()
-        elif self.file_path.endswith((".xlsx", ".xls")):
-            self.parse_excel(self.file_path)
+        try:
+            self.file_path = filedialog.askopenfilename(filetypes=[
+                ("CSV Files", "*.csv"),
+                ("Excel Files", "*.xlsx *.xls"),
+                ("All Files", "*.*")
+            ])
+            if self.file_path:
+                if self.file_path.endswith(".csv"):
+                    self.parse_csv()
+                elif self.file_path.endswith((".xlsx", ".xls")):
+                    self.parse_excel(self.file_path)
+                else:
+                    messagebox.showerror("Error", "Unsupported file type. Please select a CSV or Excel file.")
+        except FileNotFoundError:
+            messagebox.showerror("Error",  "File was not found.")
+        except PermissionError:
+            messagebox.showerror("Error", "Permission denied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error occurred  {str(e)}")
 
     def parse_csv(self):
         try:
