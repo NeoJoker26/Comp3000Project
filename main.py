@@ -14,8 +14,6 @@ import psutil
 import tracemalloc
 import time
 import threading
-import inspect
-import functools
 import multiprocessing
 
 
@@ -394,7 +392,7 @@ class PredictionAlgorithm:
         self.data = None
 
     # loading and pre processing the columns
-    @functools.lru_cache(maxsize=None)
+
     def load_data(self, file):
         self.file = file
         for col in file:
