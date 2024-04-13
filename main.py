@@ -638,7 +638,7 @@ class WindowMaker:
             self.visualise_df.data = self.data  # Set the data attribute in GraphTheory
 
             # Create a pool of worker processes
-            pool = multiprocessing.Pool(processes=4)  # Adjust the number of processes as needed
+            pool = multiprocessing.Pool(processes=4)
 
             # Run the visualization tasks in parallel
             pool.apply_async(self.visualise_df.visualize_histogram, args=('Weight',))
