@@ -10,6 +10,12 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import psycopg2
 from database import DatabaseHandler
+import psutil
+import tracemalloc
+import time
+import threading
+import inspect
+import functools
 
 
 class CRUDWindow(tk.Toplevel):
@@ -386,6 +392,7 @@ class PredictionAlgorithm:
         self.data = None
 
     # loading and pre processing the columns
+    @functools.lru_cache(maxsize=None)
     def load_data(self, file):
         self.file = file
         for col in file:
@@ -410,7 +417,7 @@ class PredictionAlgorithm:
         model.fit(X_train, y_train)
         predictions = model.predict(X_test)
 
-        num_predictions_to_print = int(0.2 * len(predictions)) # add user control
+        num_predictions_to_print = int(0.2 * len(predictions))  # add user control
         predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': predictions})
         print(predictions_df.head(num_predictions_to_print))
 
@@ -447,6 +454,7 @@ class PredictionAlgorithm:
                 print("DataFrame is missing either 'Sweetness' or 'Quality' column.")
         else:
             print("DataFrame is empty. Please load data first.")
+
 
 # this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
 # for the buttons are in modular functions, it took a while to design a good gui as i used a treeview at first but
@@ -525,8 +533,36 @@ class WindowMaker:
         self.neural_network = PredictionAlgorithm()
         self.visualise = GraphTheory()
 
+        #
+        self.stop_event = threading.Event()
+
     def main(self):
+        tracemalloc.start()
+        stats_thread = threading.Thread(target=self.display_stats, daemon=True)
+        stats_thread.start()
+
         self.window.mainloop()
+
+        self.stop_event.set()
+        stats_thread.join()
+
+    def display_stats(self):
+        while not self.stop_event.is_set():
+            if tracemalloc.is_tracing():
+                snapshot = tracemalloc.take_snapshot()
+                for stat in snapshot.statistics('lineno'):
+                    print(stat)
+            else:
+                print("tracemalloc is not tracing memory allocations.")
+
+            cpu_percent = psutil.cpu_percent(interval=None)
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+
+            print(f"CPU Utilization: {cpu_percent}%")
+            print(f"Memory Utilization: {memory_percent}%")
+
+            time.sleep(15)
 
     def open_file(self):
         self.file_path = filedialog.askopenfilename(filetypes=[
