@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, Float, String
 from sqlalchemy.orm import Mapped, mapped_column
 from base import Base
 
+
 class Banana(Base):
     # the table name, but this can be anything as it is a concept
     __tablename__ = "banana_quality"

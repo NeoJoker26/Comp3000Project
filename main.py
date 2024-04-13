@@ -16,8 +16,10 @@ import time
 import threading
 import inspect
 import functools
+import multiprocessing
 
 
+# noinspection PyAttributeOutsideInit
 class CRUDWindow(tk.Toplevel):
     def __init__(self, parent, data, db_handler):
         super().__init__(parent)
@@ -201,7 +203,7 @@ class CRUDWindow(tk.Toplevel):
         else:
             messagebox.showerror("Error", "Failed to update banana data in the database.")
 
-    # self explantatory, delete banana (or concept field)
+    # self explanatory, delete banana (or concept field)
     def delete_entry(self):
         self.clear_window()
 
@@ -459,7 +461,7 @@ class PredictionAlgorithm:
 # this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
 # for the buttons are in modular functions, it took a while to design a good gui as i used a treeview at first but
 # then i realised how laggy it was and how awful the scroll bars were so i removed it and just left it as a label,
-# in theory i couldve used a decorator or some sort of inbuilt function but for ease for slower systems, i used a label
+# in theory i could've used a decorator or some sort of inbuilt function but for ease for slower systems, i used a label
 class WindowMaker:
     def __init__(self):
         # Configure pandas display options
@@ -636,18 +638,27 @@ class WindowMaker:
         if self.data is not None:
             self.visualise_df = GraphTheory()
             self.visualise_df.data = self.data  # Set the data attribute in GraphTheory
-            self.visualise_df.visualize_histogram('Weight')
-            self.visualise_df.visualize_histogram('Sweetness')
-            self.visualise_df.visualize_histogram('Softness')
-            self.visualise_df.visualize_histogram('HarvestTime')
-            self.visualise_df.visualize_histogram('Ripeness')
-            self.visualise_df.visualize_histogram('Acidity')
-            self.visualise_df.visualize_quality()
-            self.visualise_df.visualize_weight_distribution('Size')
-            self.visualise_df.visualize_pairplot()
-            self.visualise_df.visualize_correlation_heatmap()
-            self.visualise_df.visualize_box_plot('Weight')
-            self.visualise_df.visualize_scatter_matrix()
+
+            # Create a pool of worker processes
+            pool = multiprocessing.Pool(processes=4)  # Adjust the number of processes as needed
+
+            # Run the visualization tasks in parallel
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('Weight',))
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('Sweetness',))
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('Softness',))
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('HarvestTime',))
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('Ripeness',))
+            pool.apply_async(self.visualise_df.visualize_histogram, args=('Acidity',))
+            pool.apply_async(self.visualise_df.visualize_quality)
+            pool.apply_async(self.visualise_df.visualize_weight_distribution, args=('Size',))
+            pool.apply_async(self.visualise_df.visualize_pairplot)
+            pool.apply_async(self.visualise_df.visualize_correlation_heatmap)
+            pool.apply_async(self.visualise_df.visualize_box_plot, args=('Weight',))
+            pool.apply_async(self.visualise_df.visualize_scatter_matrix)
+
+            # Wait for all tasks to complete
+            pool.close()
+            pool.join()
         else:
             print("No file data loaded.")
 
