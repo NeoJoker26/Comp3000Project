@@ -33,9 +33,9 @@
 - Run the application: python main.py
 
 **Usage**
-Launch the application by running python main.py.
-Use the "Open File" button to select a CSV file containing banana quality data.
-The loaded data will be displayed in the main window. You can scroll horizontally and vertically to view the entire dataset.
-Use the "Send Through Database" button to open the CRUD Operations window, where you can perform Create, Read, Update, and Delete operations on banana quality entries.
-Use the "Send Through Machine Learning" button to evaluate the MLPRegressor model.
-Use the "Visualize" button to open the Graph Selection window, where you can select the desired variables and graph type to visualize the data (Suggestions provided).
+- Launch the application by running python main.py.
+- Use the "Open File" button to select a CSV file containing banana quality data.
+- The loaded data will be displayed in the main window. You can scroll horizontally and vertically to view the entire dataset.
+- Use the "Send Through Database" button to open the CRUD Operations window, where you can perform Create, Read, Update, and Delete operations on banana quality entries.
+- Use the "Send Through Machine Learning" button to evaluate the MLPRegressor model.
+- Use the "Visualize" button to open the Graph Selection window, where you can select the desired variables and graph type to visualize the data (Suggestions provided).
