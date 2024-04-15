@@ -36,17 +36,57 @@ class WindowMakerTest(unittest.TestCase):
 
     def test_visualize_histogram(self):
         data = pd.DataFrame({'Weight': [1, 2, 3, 4, 5]})
-        graph_theory = GraphTheory(data)
+        graph_theory = GraphTheory()
+        graph_theory.data = data
         with patch('matplotlib.pyplot.show') as mock_show:
-            graph_theory.visualize_histogram('Weight')
-            self.assertEqual(mock_show.call_count, 1)
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_histogram('Weight', graph_window)
+            self.assertEqual(mock_show.call_count, 0)
 
     def test_visualize_line_plot(self):
         data = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
-        graph_theory = GraphTheory(data)
+        graph_theory = GraphTheory()
+        graph_theory.data = data
         with patch('matplotlib.pyplot.show') as mock_show:
-            graph_theory.visualize_line_plot('x', 'y')
-            self.assertEqual(mock_show.call_count, 1)
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_line_plot('x', 'y', graph_window)
+            self.assertEqual(mock_show.call_count, 0)
+
+    def test_visualize_scatter_plot(self):
+        data = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+        graph_theory = GraphTheory()
+        graph_theory.data = data
+        with patch('matplotlib.pyplot.show') as mock_show:
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_scatter_plot('x', 'y', graph_window)
+            self.assertEqual(mock_show.call_count, 0)
+
+    def test_visualize_box_plot(self):
+        data = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+        graph_theory = GraphTheory()
+        graph_theory.data = data
+        with patch('matplotlib.pyplot.show') as mock_show:
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_box_plot('x', graph_window)
+            self.assertEqual(mock_show.call_count, 0)
+
+    def test_visualize_pair_plot(self):
+        data = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+        graph_theory = GraphTheory()
+        graph_theory.data = data
+        with patch('matplotlib.pyplot.show') as mock_show:
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_pairplot(graph_window)
+            self.assertEqual(mock_show.call_count, 0)
+
+    def test_visualize_correlation_heatmap(self):
+        data = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+        graph_theory = GraphTheory()
+        graph_theory.data = data
+        with patch('matplotlib.pyplot.show') as mock_show:
+            graph_window = tk.Toplevel()
+            graph_theory.visualize_correlation_heatmap(graph_window)
+            self.assertEqual(mock_show.call_count, 0)
 
     def setUp(self):
         # Create an in-memory SQLite database
@@ -75,6 +115,39 @@ class WindowMakerTest(unittest.TestCase):
         self.assertEqual(retrieved_banana.ripeness, 4)
         self.assertEqual(retrieved_banana.acidity, 1)
         self.assertEqual(retrieved_banana.quality, "good")
+
+    def test_crud_window_create_entry(self):
+        root = tk.Tk()
+        data = pd.DataFrame()
+        db_handler = DatabaseHandler("sqlite:///:memory:")
+        crud_window = CRUDWindow(root, data, db_handler)
+
+        crud_window.create_entry()
+        self.assertIsNotNone(crud_window.create_form_frame)
+
+        crud_window.destroy()
+
+    def test_crud_window_update_entry(self):
+        root = tk.Tk()
+        data = pd.DataFrame()
+        db_handler = DatabaseHandler("sqlite:///:memory:")
+        crud_window = CRUDWindow(root, data, db_handler)
+
+        crud_window.update_entry()
+        self.assertIsNotNone(crud_window.winfo_children()[1])  # Check if update_frame is created
+
+        crud_window.destroy()
+
+    def test_crud_window_delete_entry(self):
+        root = tk.Tk()
+        data = pd.DataFrame()
+        db_handler = DatabaseHandler("sqlite:///:memory:")
+        crud_window = CRUDWindow(root, data, db_handler)
+
+        crud_window.delete_entry()
+        self.assertIsNotNone(crud_window.winfo_children()[1])  # Check if delete_frame is created
+
+        crud_window.destroy()
 
 
 if __name__ == '__main__':
