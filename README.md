@@ -27,7 +27,7 @@
 - Chardet
 
 **Installation**
-- Clone the repository: git clone https://github.com/your-username/Comp3000Project.git
+- Clone the repository: git clone https://github.com/NeoJoker26/Comp3000Project.git
 - Install the required dependencies: pip install -r requirements.txt
 - Set up the PostgreSQL database and update the database connection string in the database.py file.
 - Run the application: python main.py
