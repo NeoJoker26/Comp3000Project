@@ -1,5 +1,8 @@
+import os
 import tkinter as tk
+from datetime import datetime
 from tkinter import ttk, filedialog, messagebox
+import numpy as np
 import pandas as pd
 import pyarrow as py
 import chardet
@@ -7,27 +10,33 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, explained_variance_score, max_error, mean_squared_log_error, \
+    median_absolute_error
+from sklearn.model_selection import train_test_split, cross_val_predict
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
 import psycopg2
+from sqlalchemy import column
 from database import DatabaseHandler
 import psutil
 import threading
-import multiprocessing
 import logging
+import csv
 
 # start global logger
 logger = logging.getLogger(__name__)
 
 
 # noinspection PyAttributeOutsideInit
+# CRUD window + Scripts for SQLALchemy/PostgreSQL work
 class CRUDWindow(tk.Toplevel):
-    def __init__(self, parent, data, db_handler):
+    def __init__(self, parent, data, db_handler, file_path):
+        # Call the constructor of the superclass
         super().__init__(parent)
         self.parent = parent
         self.data = data
         self.db_handler = db_handler
+        self.file_path = file_path
         self.colorblind_mode = False  # Flag for colorblind mode
         self.colorblind_type = "None"  # Default colorblind type
 
@@ -49,30 +58,30 @@ class CRUDWindow(tk.Toplevel):
         self.button_frame.pack(pady=20)
 
         # Create button
-        self.create_button = tk.Button(self.button_frame, text="Create", command=self.create_entry,
-                                       font=("Helvetica", 12), width=10, height=2, relief=tk.RAISED, bd=2)
+        self.create_button = ttk.Button(self.button_frame, text="Create", command=self.create_entry)
         self.create_button.pack(side=tk.LEFT, padx=10)
 
         # Read button
-        self.read_button = tk.Button(self.button_frame, text="Read", command=self.visualise,
-                                     font=("Helvetica", 12), width=10, height=2, relief=tk.RAISED, bd=2)
+        self.read_button = ttk.Button(self.button_frame, text="Read", command=self.visualise)
         self.read_button.pack(side=tk.LEFT, padx=10)
 
         # Update button
-        self.update_button = tk.Button(self.button_frame, text="Update", command=self.update_entry,
-                                       font=("Helvetica", 12), width=10, height=2, relief=tk.RAISED, bd=2)
+        self.update_button = ttk.Button(self.button_frame, text="Update", command=self.update_entry)
         self.update_button.pack(side=tk.LEFT, padx=10)
 
         # Delete button
-        self.delete_button = tk.Button(self.button_frame, text="Delete", command=self.delete_entry,
-                                       font=("Helvetica", 12), width=10, height=2, relief=tk.RAISED, bd=2)
+        self.delete_button = ttk.Button(self.button_frame, text="Delete", command=self.delete_entry)
         self.delete_button.pack(side=tk.LEFT, padx=10)
+
+        # Scripts button
+        self.scripts_button = ttk.Button(self.button_frame, text="Scripts", command=self.run_scripts)
+        self.scripts_button.pack(side=tk.LEFT, padx=10)
 
         # Colorblind mode dropdown
         self.colorblind_var = tk.StringVar()
         colorblind_options = ["None", "Protanopia", "Deuteranopia", "Tritanopia"]
-        colorblind_dropdown = tk.OptionMenu(self.button_frame, self.colorblind_var, *colorblind_options,
-                                            command=self.update_colorblind_mode)
+        colorblind_dropdown = ttk.OptionMenu(self.button_frame, self.colorblind_var, *colorblind_options,
+                                             command=self.update_colorblind_mode)
         colorblind_dropdown.pack(side=tk.LEFT, padx=10)
         self.colorblind_var.set("None")  # Set default value
 
@@ -112,20 +121,40 @@ class CRUDWindow(tk.Toplevel):
                                 font=("Helvetica", 12), width=10, height=2, relief=tk.RAISED, bd=2)
         back_button.grid(row=len(labels) + 1, column=0, columnspan=2, pady=10, padx=10)
 
+        # Method for setting button colors
         self.set_button_colors(confirm_button, back_button)
 
     def submit_data(self):
         # Check if all input fields are filled
         if all(entry.get() for entry in self.input_fields):
             values = [entry.get() for entry in self.input_fields]
-            # Create new banana in the db
-            banana_id = self.db_handler.create_banana(*values)
-            # added "professional" messages to handle the errors
-            messagebox.showinfo("Success", f"New banana entry created with id: {banana_id}")
-            logger.info(f"New banana entry created with id: {banana_id}")
+            try:
+                # Append new data to the CSV file
+                with open(self.file_path, 'a', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(values)
+                # Create new banana in the database
+                banana_id = self.db_handler.create_banana(*values)
+                messagebox.showinfo("Success",
+                                    f"New entry appended to the CSV file and created in the database with id: {banana_id}")
+                logger.info(f"New entry appended to the CSV file and created in the database with id: {banana_id}")
+            except AttributeError as e:
+                messagebox.showerror("Error", f"The file path is not accessible: {str(e)}")
+                logger.error(f"The file path is not accessible: {str(e)}")
+                print("The new entry could not be appended because the file path is not accessible.")
+            except Exception as e:
+                messagebox.showerror("Error",
+                                     f"An error occurred while appending data to the CSV file and creating a new banana entry: {str(e)}")
+                logger.error(
+                    f"An error occurred while appending data to the CSV file and creating a new banana entry: {str(e)}")
+                print(
+                    "The new entry could not be appended and created due to file permissions, "
+                    "file corruption, or database connectivity issues.")
         else:
             messagebox.showerror("Error", "Please enter all fields.")
             logger.error("Error occurred while entering data.")
+            print(
+                "The new entry was not appended and created because some input fields were left empty.")
 
     def update_entry(self):
         self.clear_window()
@@ -210,10 +239,8 @@ class CRUDWindow(tk.Toplevel):
 
     def update_banana(self, banana_id):
         # Get values from update fields
-
         values = [entry.get() for entry in self.update_fields]
         # Prepare banana data dictionary
-
         banana_data = {
             "size": float(values[0]),
             "weight": float(values[1]),
@@ -224,14 +251,39 @@ class CRUDWindow(tk.Toplevel):
             "acidity": float(values[6]),
             "quality": values[7]
         }
-        # finally, update said banana
-        updated_banana = self.db_handler.update_banana(banana_id, **banana_data)
-        if updated_banana:
-            messagebox.showinfo("Success", "Banana data updated successfully.")
-            logger.info("Banana data updated successfully.")
-        else:
-            messagebox.showerror("Error", "Failed to update banana data in the database.")
-            logger.error("Failed to update banana data in the database.")
+        try:
+            # Update data in the CSV file
+            updated_data = []
+            with open(self.file_path, 'r') as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    if row[0] == str(banana_id):
+                        updated_data.append(values)
+                    else:
+                        updated_data.append(row)
+            with open(self.file_path, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(updated_data)
+            # Update banana data in the database
+            updated_banana = self.db_handler.update_banana(banana_id, **banana_data)
+            if updated_banana:
+                messagebox.showinfo("Success", "Banana data updated successfully in the CSV file and database.")
+                logger.info("Banana data updated successfully in the CSV file and database.")
+            else:
+                messagebox.showerror("Error", "Failed to update banana data in the database.")
+                logger.error("Failed to update banana data in the database.")
+                print(
+                    "The banana data could not be updated in the database due to connectivity issues or invalid data.")
+        except AttributeError as e:
+            messagebox.showerror("Error", f"The file path is not accessible: {str(e)}")
+            logger.error(f"The file path is not accessible: {str(e)}")
+            print("The banana data could not be updated because the file path is not accessible.")
+        except Exception as e:
+            messagebox.showerror("Error",
+                                 f"An error occurred while updating banana data in the CSV file and database: {str(e)}")
+            logger.error(f"An error occurred while updating banana data in the CSV file and database: {str(e)}")
+            print(
+                "The banana data could not be updated due to file permissions, file corruption, or database connectivity issues.")
 
     # delete banana (or concept field)
     def delete_entry(self):
@@ -260,23 +312,48 @@ class CRUDWindow(tk.Toplevel):
         self.set_button_colors(confirm_button, back_button)
 
     def delete_banana(self, banana_id):
-        # Delete banana data from the database
+        # Delete data from the CSV file and database
         if banana_id:
             try:
                 banana_id = int(banana_id)
+                # Delete data from the CSV file
+                updated_data = []
+                with open(self.file_path, 'r') as file:
+                    reader = csv.reader(file)
+                    for row in reader:
+                        if row[0] != str(banana_id):
+                            updated_data.append(row)
+                with open(self.file_path, 'w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerows(updated_data)
+                # Delete banana data from the database
                 success = self.db_handler.delete_banana(banana_id)
                 if success:
-                    messagebox.showinfo("Success", "Banana data deleted successfully.")
-                    logger.info("Banana data deleted successfully.")
+                    messagebox.showinfo("Success", "Banana data deleted successfully from the CSV file and database.")
+                    logger.info("Banana data deleted successfully from the CSV file and database.")
                 else:
                     messagebox.showerror("Error", "Failed to delete banana data from the database.")
                     logger.error("Failed to delete banana data from the database.")
+                    print(
+                        "The banana data could not be deleted from the database due to connectivity issues or invalid data.")
             except ValueError:
                 messagebox.showerror("Error", "Invalid Banana ID. Please enter a valid integer.")
                 logger.error("Invalid Banana ID. Please enter a valid integer.")
+                print("The banana data was not deleted because an invalid ID was entered.")
+            except AttributeError as e:
+                messagebox.showerror("Error", f"The file path is not accessible: {str(e)}")
+                logger.error(f"The file path is not accessible: {str(e)}")
+                print("The banana data could not be deleted because the file path is not accessible.")
+            except Exception as e:
+                messagebox.showerror("Error",
+                                     f"An error occurred while deleting banana data from the CSV file and database: {str(e)}")
+                logger.error(f"An error occurred while deleting banana data from the CSV file and database: {str(e)}")
+                print(
+                    "The banana data could not be deleted due to file permissions, file corruption, or database connectivity issues.")
         else:
             messagebox.showerror("Error", "Please enter a Banana ID.")
             logger.error("Please enter a Banana ID.")
+            print("The banana data was not deleted because no ID was entered.")
 
     # this is a bit funky as it will show the _sa_ instance state too but i would like to keep that just incase there
     # is an error, also shows everything in a list
@@ -331,6 +408,128 @@ class CRUDWindow(tk.Toplevel):
             messagebox.showerror("Error", "Please enter a Banana ID.")
             logger.error("Please enter a Banana ID.")
 
+    def run_scripts(self):
+        script_window = tk.Toplevel(self)  # Create a new window for running scripts
+        script_window.title("Scripts")  # Set the title of the script window
+        script_window.geometry("800x1000")  # Set the size of the script window
+
+        # Create a frame for the script selection
+        script_frame = tk.Frame(script_window)
+        script_frame.pack(pady=10)
+
+        # Create a listbox for script selection
+        script_listbox = tk.Listbox(script_frame, height=10, width=60)
+        script_listbox.pack()
+
+        # Add script options to the listbox
+        script_options = [
+            "Show bottom 100",
+            "Show top 100",
+            "Count records",
+            "Calculate average for column",
+            "Find maximum value for column",
+            "Find minimum value for column"
+        ]
+
+        #  Iterate over the script options
+        for option in script_options:
+            # Insert each option into the script listbox
+            script_listbox.insert(tk.END, option)
+
+        # Create a frame for additional input fields
+        input_frame = tk.Frame(script_window)
+        input_frame.pack(pady=10)
+
+        # Table name dropdown menu
+        table_label = tk.Label(input_frame, text="Select table:")
+        # Create a label for table selection
+        table_label.grid(row=0, column=0, sticky="e")
+
+        # Position the table label in the input frame
+        table_var = tk.StringVar(script_window)
+        # Create a StringVar to hold the selected table
+
+        table_dropdown = tk.OptionMenu(input_frame, table_var, "")
+        # Create a dropdown menu for table selection
+        table_dropdown.grid(row=0, column=1)
+
+        # Column name dropdown menu
+        column_label = tk.Label(input_frame, text="Select column:")
+        column_label.grid(row=1, column=0, sticky="e")
+        column_var = tk.StringVar(script_window)
+        column_dropdown = tk.OptionMenu(input_frame, column_var, "")
+        column_dropdown.grid(row=1, column=1)
+
+        # Populate table and column dropdown menus
+        table_names = self.db_handler.get_table_names()
+        table_var.set(table_names[0])  # Set the default selected table
+        table_dropdown['menu'].delete(0, 'end')
+        for table in table_names:
+            #tk._setit is a method in Tkinter used to associate a variable with a value when an option is chosen from a dropdown menu.
+            table_dropdown['menu'].add_command(label=table, command=tk._setit(table_var, table))
+
+        # used args to accept a number of positional arguments
+        def update_column_dropdown(*args):
+            #  Get the selected table
+            selected_table = table_var.get()
+            column_names = self.db_handler.get_column_names(selected_table)
+            column_var.set(column_names[0])  # Set the default selected column
+            column_dropdown['menu'].delete(0, 'end')
+            for column in column_names:
+                column_dropdown['menu'].add_command(label=column, command=tk._setit(column_var, column))
+
+        table_var.trace('w', update_column_dropdown)
+
+        # Create a text area to display the script results
+        result_text = tk.Text(script_window, height=20, width=80)  # Increased text area size
+        result_text.pack(pady=10)
+
+        def run_selected_script():
+            # Get the selected indices from the script listbox
+            selected_indices = script_listbox.curselection()
+
+            # Check if any script is selected
+            if selected_indices:
+                selected_script = script_listbox.get(selected_indices[0])
+                table_name = table_var.get()
+                column_name = column_var.get()
+
+                if selected_script == "Show bottom 100":
+                    result = self.db_handler.show_bottom_100(table_name)
+
+                    # Format the result as a string
+                    formatted_result = '\n'.join(str(banana) for banana in result)
+                    result_text.delete('1.0', tk.END)
+                    # tk.END represents the end of the text widget
+                    result_text.insert(tk.END, formatted_result)
+                elif selected_script == "Show top 100":
+                    result = self.db_handler.show_top_100(table_name)
+                    formatted_result = '\n'.join(str(banana) for banana in result)
+                    result_text.delete('1.0', tk.END)
+                    result_text.insert(tk.END, formatted_result)
+                elif selected_script == "Count records":
+                    result = self.db_handler.count_records()
+                    result_text.delete('1.0', tk.END)
+                    result_text.insert(tk.END, str(result))
+                elif selected_script == "Calculate average for column":
+                    result = self.db_handler.calculate_average(column_name)
+                    result_text.delete('1.0', tk.END)
+                    result_text.insert(tk.END, str(result))
+                elif selected_script == "Find maximum value for column":
+                    result = self.db_handler.find_max_value(column_name)
+                    result_text.delete('1.0', tk.END)
+                    result_text.insert(tk.END, str(result))
+                elif selected_script == "Find minimum value for column":
+                    result = self.db_handler.find_min_value(column_name)
+                    result_text.delete('1.0', tk.END)
+                    result_text.insert(tk.END, str(result))
+            else:
+                messagebox.showinfo("No Selection", "Please select a script from the list.")
+
+        # Create a button to run the selected script
+        run_button = tk.Button(script_window, text="Run Script", command=run_selected_script)
+        run_button.pack(pady=10)
+
     def clear_window(self):
         # clear window to either display error or new window/widget
         for widget in self.winfo_children():
@@ -353,6 +552,7 @@ class CRUDWindow(tk.Toplevel):
         palette = self.colorblind_palette.get(self.colorblind_type, self.regular_palette)
 
         for button in buttons:
+            # check what button is chosen
             if button["text"] in ["Confirm", "Submit"]:
                 button.configure(bg=palette["confirm_bg"], fg="white")
             elif button["text"] == "Back":
@@ -381,47 +581,46 @@ class GraphSelectionWindow(tk.Toplevel):
         self.title("Graph Selection")
         self.geometry("500x600")
 
-        # Create widgets for header selection and graph type
+        # Create frames for header selection and graph type
         header_frame = tk.Frame(self)
         header_frame.pack(pady=10)
-
-        header_label = tk.Label(header_frame, text="Select headers to compare (max 10):")
-        header_label.pack()
-
-        self.header_var = tk.StringVar()
-        self.header_dropdown = tk.OptionMenu(header_frame, self.header_var, *self.headers)
-        self.header_dropdown.pack()
-
-        button_frame = tk.Frame(header_frame)
-        button_frame.pack()
-
-        add_button = tk.Button(button_frame, text="+", command=self.add_header)
-        add_button.pack(side=tk.LEFT, padx=5)
-
-        delete_button = tk.Button(button_frame, text="-", command=self.delete_header)
-        delete_button.pack(side=tk.LEFT, padx=5)
-
-        self.selected_headers_listbox = tk.Listbox(header_frame, height=10)
-        self.selected_headers_listbox.pack(fill=tk.BOTH, expand=True)
 
         graph_type_frame = tk.Frame(self)
         graph_type_frame.pack(pady=10)
 
-        graph_type_label = tk.Label(graph_type_frame, text="Select graph type:")
-        graph_type_label.pack()
-
-        graph_types = ["Histogram", "Line Plot", "Scatter Plot", "Box Plot", "Pair Plot", "Heatmap"]
-        for graph in graph_types:
-            tk.Radiobutton(graph_type_frame, text=graph, variable=self.graph_type, value=graph.lower()).pack(
-                anchor=tk.W)
-
         button_frame = tk.Frame(self)
         button_frame.pack(pady=10)
 
-        self.visualize_button = tk.Button(button_frame, text="Visualize")
+        # Create widgets for header selection
+        header_label = ttk.Label(header_frame, text="Select headers to compare (max 10):")
+        header_label.grid(row=0, column=0, sticky="w")
+
+        self.header_var = tk.StringVar()
+        self.header_dropdown = ttk.OptionMenu(header_frame, self.header_var, *self.headers)
+        self.header_dropdown.grid(row=1, column=0, sticky="w")
+
+        add_button = ttk.Button(header_frame, text="+", command=self.add_header)
+        add_button.grid(row=1, column=1, padx=5)
+
+        delete_button = ttk.Button(header_frame, text="-", command=self.delete_header)
+        delete_button.grid(row=1, column=2, padx=5)
+
+        self.selected_headers_listbox = tk.Listbox(header_frame, height=10)
+        self.selected_headers_listbox.grid(row=2, column=0, columnspan=3, sticky="ew")
+
+        # Create widgets for graph type selection
+        graph_type_label = ttk.Label(graph_type_frame, text="Select graph type:")
+        graph_type_label.grid(row=0, column=0, sticky="w")
+
+        graph_types = ["Histogram", "Line Plot", "Scatter Plot", "Box Plot", "Pair Plot", "Heatmap"]
+        for i, graph in enumerate(graph_types):
+            ttk.Radiobutton(graph_type_frame, text=graph, variable=self.graph_type, value=graph.lower()).grid(row=i+1, column=0, sticky="w")
+
+        # Create visualize and cancel buttons
+        self.visualize_button = ttk.Button(button_frame, text="Visualize")
         self.visualize_button.pack(side=tk.LEFT, padx=5)
 
-        cancel_button = tk.Button(button_frame, text="Cancel", command=self.destroy)
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self.destroy)
         cancel_button.pack(side=tk.LEFT, padx=5)
 
     def add_header(self):
@@ -456,17 +655,29 @@ class GraphTheory:
         # Visualize histogram for a given column
         try:
             if self.data is not None:
-                fig = Figure(figsize=(6, 4), dpi=100)
+                # Create a Figure object, set to large size but open to change for user preference
+                fig = Figure(figsize=(8, 8), dpi=100)
+                # Add a subplot to the figure
                 ax = fig.add_subplot(111)
 
                 # Convert the data to a DataFrame
                 data = pd.DataFrame(self.data[column], columns=[column])
 
-                sns.histplot(data=data, x=column, ax=ax)
+                # create hisogram with seaborn, set some specifics but once again, open to user preference
+                sns.histplot(data=data, x=column, ax=ax, kde=True, color='skyblue', bins=20, edgecolor='black', alpha=0.7)
                 ax.set_xlabel(column)
                 ax.set_ylabel('Frequency')
                 ax.set_title(f'Histogram of {column}')
+                ax.legend([column])
 
+                # Add mean and median vertical lines
+                mean = data[column].mean()
+                median = data[column].median()
+                ax.axvline(mean, color='red', linestyle='--', label=f'Mean: {mean:.2f}')
+                ax.axvline(median, color='green', linestyle='--', label=f'Median: {median:.2f}')
+                ax.legend()
+
+                # Create a FigureCanvasTkAgg object to display the plot in the graph window
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
                 canvas.get_tk_widget().pack()
@@ -487,10 +698,17 @@ class GraphTheory:
                 # Convert the data to a DataFrame
                 data = pd.DataFrame(self.data[[x_column, y_column]])
 
-                sns.lineplot(x=x_column, y=y_column, data=data, ax=ax)
+                sns.lineplot(x=x_column, y=y_column, data=data, ax=ax, color='blue', linewidth=2, marker='o', markersize=6)
                 ax.set_xlabel(x_column)
                 ax.set_ylabel(y_column)
                 ax.set_title(f'Line Plot of {y_column} against {x_column}')
+
+                # Add value labels to data points
+                for x, y in zip(data[x_column], data[y_column]):
+                    ax.text(x, y, f'({x:.2f}, {y:.2f})', fontsize=8, ha='left', va='bottom')
+
+                # Add grid lines
+                ax.grid(True, linestyle='--', alpha=0.7)
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -502,20 +720,32 @@ class GraphTheory:
             messagebox.showerror("Error", f"An error occurred while creating the line plot: {str(e)}")
             logger.error(f"An error occurred while creating the line plot: {str(e)}")
 
-    def visualize_scatter_plot(self, x_column, y_column, graph_window):
+    def visualize_scatter_plot(self, x_column, y_column, graph_window, hue_column=None):
         # Visualize scatter plot for given x and y columns
         try:
             if self.data is not None:
-                fig = Figure(figsize=(6, 4), dpi=100)
+                fig = Figure(figsize=(10, 8), dpi=150)
                 ax = fig.add_subplot(111)
 
                 # Convert the data to a DataFrame
-                data = pd.DataFrame(self.data[[x_column, y_column]])
+                if hue_column is None:
+                    data = pd.DataFrame(self.data[[x_column, y_column]])
+                else:
+                    data = pd.DataFrame(self.data[[x_column, y_column, hue_column]])
 
-                sns.scatterplot(x=x_column, y=y_column, data=data, ax=ax)
+                if hue_column is None:
+                    sns.scatterplot(x=x_column, y=y_column, data=data, ax=ax, color='darkblue', s=60, alpha=0.7)
+                else:
+                    sns.scatterplot(x=x_column, y=y_column, hue=hue_column, data=data, ax=ax, palette='viridis', s=60, alpha=0.7)
+                    ax.legend(title=hue_column, loc='upper right')
+
                 ax.set_xlabel(x_column)
                 ax.set_ylabel(y_column)
                 ax.set_title(f'Scatter Plot of {y_column} against {x_column}')
+
+                # Add value labels to data points
+                for _, row in data.iterrows():
+                    ax.text(row[x_column], row[y_column], f'({row[x_column]:.2f}, {row[y_column]:.2f})', fontsize=8, ha='left', va='bottom')
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -531,16 +761,26 @@ class GraphTheory:
         # Visualize box plot for a given column
         try:
             if self.data is not None:
-                fig = Figure(figsize=(6, 4), dpi=100)
+                fig = Figure(figsize=(8, 6), dpi=100)
                 ax = fig.add_subplot(111)
 
                 # Convert the data to a DataFrame
                 data = pd.DataFrame(self.data[column], columns=[column])
 
-                sns.boxplot(x=column, data=data, ax=ax)
+                sns.boxplot(x=column, data=data, ax=ax, color='skyblue', linewidth=1.5, fliersize=3)
                 ax.set_xlabel(column)
                 ax.set_ylabel('Value')
                 ax.set_title(f'Box Plot of {column}')
+
+                # Add data points as scatter points
+                sns.stripplot(x=column, data=data, ax=ax, color='darkblue', size=4, alpha=0.5)
+
+                # Display statistical summary
+                quartiles = data[column].quantile([0.25, 0.5, 0.75])
+                q1, median, q3 = quartiles[0.25], quartiles[0.5], quartiles[0.75]
+                iqr = q3 - q1
+                ax.text(0.95, 0.95, f'Median: {median:.2f}\nQ1: {q1:.2f}, Q3: {q3:.2f}\nIQR: {iqr:.2f}',
+                        transform=ax.transAxes, fontsize=10, ha='right', va='top', bbox=dict(facecolor='white', alpha=0.8))
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -556,8 +796,9 @@ class GraphTheory:
         # Visualize pair plot
         try:
             if self.data is not None:
-                fig = sns.pairplot(self.data)
-                fig.fig.suptitle("Pair Plot")
+                fig = sns.pairplot(self.data, diag_kind='kde', height=3,
+                                   aspect=1.5)
+                fig.fig.suptitle("Pair Plot", fontsize=16)
                 fig.fig.subplots_adjust(top=0.95)
 
                 canvas = FigureCanvasTkAgg(fig.fig, master=graph_window)
@@ -577,8 +818,13 @@ class GraphTheory:
                 fig = Figure(figsize=(8, 6), dpi=100)
                 ax = fig.add_subplot(111)
 
-                sns.heatmap(self.data.corr(), annot=True, cmap='coolwarm', ax=ax)
+                corr_matrix = self.data.corr()
+                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax, fmt='.2f', linewidths=0.5, annot_kws={"fontsize": 10})
                 ax.set_title('Correlation Heatmap')
+
+                # Add a color bar
+                cbar = ax.collections[0].colorbar
+                cbar.ax.tick_params(labelsize=10)
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -602,32 +848,70 @@ class PredictionAlgorithm:
         self.file = file
         for col in file:
             try:
+                # Convert the column values to numeric type
                 file[col] = pd.to_numeric(file[col])
                 self.columns.append(col)
             except ValueError:
+                # Drop the column if it cannot be converted to numeric type
                 file = file.drop(col, axis=1)
+                # Check if "banana_id" column exists in the file
+        if "banana_id" in file.columns:
+            # Drop the "banana_id" column from the file for purpose of testing as it is the primary key in the
+            # database, once again, this can be changed per user choice, only added as a safety measure
+            self.file = file.drop("banana_id", axis=1)
 
     # where the magic happens, the csv file is evaluated with the MLPRegressor model (neural network) and it shows
     # the next 20% predictions with graphs, this is tested at 97-98% accuracy
     def evaluate_models(self):
         # Evaluate models using MLPRegressor
         file = self.file
+        # Create an instance of MinMaxScaler for feature scaling
         scaler = MinMaxScaler()
         file[self.columns] = scaler.fit_transform(file[self.columns])
         X = file[self.columns]
         y = file['Size']
         X = scaler.fit_transform(X)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        model = MLPRegressor(hidden_layer_sizes=(50, 25), max_iter=1000, activation='relu', random_state=42)
+
+        # this is a meticulously edited regressor, I have experimented with different test sizes (0.1,0.15, 0.2,
+        # 0.25, 0.3) and 25% gave the best accuracy, random state made the least difference but anywhere from 30-50
+        # returns the same/similar value, added shuffle for extra randomness layer wise, this was interesting as I
+        # still have no clue how to perfect it BUT, this was a genuine pain, i started with 2 layers,
+        # based the amount of layers on % of the "database" i was working (8000 inputs), started with 200,
+        # 100 as a baseline (figured this would be good as its not too small and not too large) and then
+        # experiemented. to my knowledge, layer 1 would work on the low level features and layer two would work on
+        # the combining features to learn) After experimenting with i think over 20 different set ups (
+        # decreasing/increasing both layers), i figured i would look at the documentation and i figured out there
+        # could be more than 2 layers...However, the issue with having more layers does mean there is a higher chance
+        # of overfitting or errors, i found that even if i add 1 more layer, there are more outliers and more
+        # erroneous data. After discovering oh there can be more layers, i added a 3rd layer... and once again i had
+        # to spend countless hours adjusting and experimenting with layers, this 150,75,25 has given me the best
+        # metrics compared to my previous experiments next came the activation, this was simple as im working with
+        # random data not, binary or hyperbolic solver once again was easy, from the 3 - adam, lbfgs, sgd - adam was
+        # the fastest and most efficient alpha i tested between 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001,
+        # this had the best score based of different metrics (to 7sf), each alpha i ran 3 times to confirm the
+        # scores, unfortunately the scores werent TOO different, with the difference being very minor however,
+        # this showed the best scores every time learning rate  also made little difference but once again,
+        # i tested it 3 times and this gave the best score 2/3 time the iterations also make a difference,
+        # if this code ever becomes open source, it would be best to adjust 1:8 (1 epoch per 8 inputs) as ive noticed
+        # that after a while the iterations start to plateau, the lower the tol the technically better, ive set this
+        # to such a small number so that it can be very precise finally, the batch size is set to auto as this does
+        # depend on the system and if i adjust it to my set up, it may not be as good on another system
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=30, shuffle=True)
+        model = MLPRegressor(hidden_layer_sizes=(150, 75, 25), activation='relu', solver='adam', alpha=0.01,
+                             learning_rate='adaptive', max_iter=1000, random_state=42, tol=0.00001, batch_size='auto')
         model.fit(X_train, y_train)
         predictions = model.predict(X_test)
 
-        num_predictions_to_print = int(0.2 * len(predictions))  # add user control
+        num_predictions_to_print = int(0.2 * len(predictions))  # add user control as a future option
         predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': predictions})
         print(predictions_df.head(num_predictions_to_print))
         logger.info("Models evaluated successfully.")
 
-        # Visualize actual vs. predicted values
+        # Call the function for neural network visualizations and statistics
+        self.neural_network_visualisations_and_statistics(y_test, predictions, model, X_train, y_train)
+
+    def neural_network_visualisations_and_statistics(self, y_test, predictions, model, X_train, y_train):
+        # Scatter plot of actual vs. predicted values
         plt.figure(figsize=(8, 6))
         plt.scatter(y_test, predictions)
         plt.xlabel('Actual Values')
@@ -636,7 +920,7 @@ class PredictionAlgorithm:
         plt.grid(True)
         plt.show()
 
-        # Visualize density plot of predicted values
+        # Density plot of predicted values
         plt.figure(figsize=(8, 6))
         sns.kdeplot(predictions, label='Predicted', fill=True)
         plt.xlabel('Predicted Values')
@@ -645,6 +929,65 @@ class PredictionAlgorithm:
         plt.legend()
         plt.grid(True)
         plt.show()
+
+        # Distribution of prediction errors (residuals)
+        residuals = y_test - predictions
+        plt.figure(figsize=(8, 6))
+        sns.histplot(residuals, kde=True)
+        plt.xlabel('Prediction Errors')
+        plt.ylabel('Frequency')
+        plt.title('Distribution of Prediction Errors')
+        plt.grid(True)
+        plt.show()
+
+        # Scatter plot of residuals vs. predicted values
+        plt.figure(figsize=(8, 6))
+        plt.scatter(predictions, residuals)
+        plt.xlabel('Predicted Values')
+        plt.ylabel('Residuals')
+        plt.title('Residuals vs. Predicted Values')
+        plt.grid(True)
+        plt.axhline(y=0, color='r', linestyle='--')
+        plt.show()
+
+        # Mean Squared Error (MSE)
+        mse = mean_squared_error(y_test, predictions)
+        print(f"Mean Squared Error: {mse:.7f}")
+
+        # R-squared score
+        r2 = r2_score(y_test, predictions)
+        print(f"R-squared Score: {r2:.7f}")
+
+        # Explained variance score
+        explained_variance = explained_variance_score(y_test, predictions)
+        print(f"Explained Variance Score: {explained_variance:.7f}")
+
+        # Mean Absolute Error (MAE)
+        mae = mean_absolute_error(y_test, predictions)
+        print(f"Mean Absolute Error: {mae:.7f}")
+
+        # Root Mean Squared Error (RMSE)
+        rmse = np.sqrt(mse)
+        print(f"Root Mean Squared Error: {rmse:.4f}")
+
+        # Max Error
+        max_error_val = max_error(y_test, predictions)
+        print(f"Max Error: {max_error_val:.7f}")
+
+        # Mean Squared Logarithmic Error (MSLE)
+        msle = mean_squared_log_error(y_test, predictions)
+        print(f"Mean Squared Logarithmic Error: {msle:.7f}")
+
+        # Median Squared Error
+        median_se = median_absolute_error(y_test, predictions) ** 2
+        print(f"Median Squared Error: {median_se:.7f}")
+
+        # Cross-validation
+        predictions_cv = cross_val_predict(model, X_train, y_train, cv=5)
+        mse_cv = mean_squared_error(y_train, predictions_cv)
+        r2_cv = r2_score(y_train, predictions_cv)
+        print(f"Cross-Validation Mean Squared Error: {mse_cv:.7f}")
+        print(f"Cross-Validation R-squared Score: {r2_cv:.7f}")
 
 
 # this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
@@ -662,69 +1005,85 @@ class WindowMaker:
         pd.set_option('display.precision', 10)
         pd.set_option('display.colheader_justify', 'left')
 
+        # Create the main window
         self.window = tk.Tk()
-        self.window.title("Search for Database")
+        self.window.title("Data Analysis Tool")
         self.window.geometry("800x600")
         self.window.minsize(800, 600)
 
-        # Create variables for file path and data
+        # Create a frame for buttons
+        self.button_frame = tk.Frame(self.window)
+        self.button_frame.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+        # Create a frame for file information
+        self.file_info_frame = tk.Frame(self.window)
+        self.file_info_frame.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+        # Create a frame for the text box
+        self.text_frame = tk.Frame(self.window)
+        self.text_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Configure grid weights to make the text frame expandable
+        self.window.grid_rowconfigure(2, weight=1)
+        self.window.grid_columnconfigure(0, weight=1)
+
+        # Create the "Open File" button
+        self.open_button = ttk.Button(self.button_frame, text="Open File", command=self.open_file)
+        self.open_button.grid(row=0, column=0, padx=5)
+
+        # Create the "Send to Database" button (initially disabled)
+        self.send_to_db_button = ttk.Button(self.button_frame, text="Send to Database", command=self.send_to_database, state=tk.DISABLED)
+        self.send_to_db_button.grid(row=0, column=1, padx=5)
+
+        # Create the "Send to Machine Learning" button (initially disabled)
+        self.send_to_ml_button = ttk.Button(self.button_frame, text="Send to Machine Learning", command=self.send_to_ml, state=tk.DISABLED)
+        self.send_to_ml_button.grid(row=0, column=2, padx=5)
+
+        # Create the "Visualize" button (initially disabled)
+        self.visualize_button = ttk.Button(self.button_frame, text="Visualize", command=self.visualize_data, state=tk.DISABLED)
+        self.visualize_button.grid(row=0, column=3, padx=5)
+
+        # Create the "Upload to PostgreSQL" button (initially disabled)
+        self.upload_button = ttk.Button(self.button_frame, text="Upload to PostgreSQL", command=self.upload_to_postgresql, state=tk.DISABLED)
+        self.upload_button.grid(row=0, column=4, padx=5)
+
+        # Create a label to display the selected file name
+        self.label_filename = ttk.Label(self.file_info_frame, text="No file selected")
+        self.label_filename.grid(row=0, column=0, sticky="w")
+
+        # Create a text box with scrollbars
+        self.text_box = tk.Text(self.text_frame, wrap=tk.NONE)
+        self.text_box.grid(row=0, column=0, sticky="nsew")
+
+        # Create a vertical scrollbar for the text box
+        self.y_scrollbar = ttk.Scrollbar(self.text_frame, orient=tk.VERTICAL, command=self.text_box.yview)
+        self.y_scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Create a horizontal scrollbar for the text box
+        self.x_scrollbar = ttk.Scrollbar(self.text_frame, orient=tk.HORIZONTAL, command=self.text_box.xview)
+        self.x_scrollbar.grid(row=1, column=0, sticky="ew")
+
+        # Configure the text box to use the scrollbars
+        self.text_box.config(yscrollcommand=self.y_scrollbar.set, xscrollcommand=self.x_scrollbar.set)
+
+        # Configure the text frame to expand with the window
+        self.text_frame.grid_rowconfigure(0, weight=1)
+        self.text_frame.grid_columnconfigure(0, weight=1)
+
+        # Initialize variables for file path and data
         self.file_path = ""
         self.data = None
 
-        # Create variable for sheets
+        # Initialize variables for sheets
         self.sheet_names = None
         self.sheet_data = {}
 
-        # Create the main window widgets
-        self.button_frame = tk.Frame(self.window)
-        self.button_frame.pack()
-
-        self.open_button = tk.Button(self.button_frame, text="Open File", command=self.open_file)
-        self.open_button.pack(side=tk.LEFT, padx=5)
-
-        self.send_to_db_button = tk.Button(self.button_frame, text="Send Through Database",
-                                           command=self.send_to_database, state=tk.DISABLED)
-        self.send_to_db_button.pack(side=tk.LEFT, padx=5)
-
-        self.send_to_ml_button = tk.Button(self.button_frame, text="Send Through Machine Learning",
-                                           command=self.send_to_ml, state=tk.DISABLED)
-        self.send_to_ml_button.pack(side=tk.LEFT, padx=5)
-
-        self.visualize_button = tk.Button(self.button_frame, text="Visualise",
-                                          command=self.visualize_data, state=tk.DISABLED)
-        self.visualize_button.pack(side=tk.LEFT, padx=5)
-
-        self.label_filename = tk.Label(self.window, text="", wraplength=300)
-        self.label_filename.pack()
-
-        # Create vertical scrollbar
-        self.y_scrollbar = ttk.Scrollbar(self.window, orient=tk.VERTICAL)
-        self.y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Create horizontal scrollbar
-        self.x_scrollbar = ttk.Scrollbar(self.window, orient=tk.HORIZONTAL)
-        self.x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # Create a text box to display the file content
-        self.text_box = tk.Text(self.window, wrap=tk.NONE, yscrollcommand=self.y_scrollbar.set,
-                                xscrollcommand=self.x_scrollbar.set)
-        self.text_box.pack(fill=tk.BOTH, expand=True)
-        self.y_scrollbar.config(command=self.text_box.yview)
-        self.x_scrollbar.config(command=self.text_box.xview)
-
-        # Create a listbox to display the detected sheets
-        # self.sheet_listbox = tk.Listbox(self.window, selectmode=tk.SINGLE, yscrollcommand=self.y_scrollbar.set)
-        # self.sheet_listbox.pack(fill=tk.BOTH, expand=True)
-        #
-        # # Bind double-click event on the listbox to select the sheet
-        # self.sheet_listbox.bind('<Double-Button-1>', self.select_sheet)
-
-        # Send file to other classes
+        # Create instances of other classes
         self.db_handler = DatabaseHandler("postgresql://neojoker26:password123@localhost:5432/dissertation")
         self.neural_network = PredictionAlgorithm()
         self.visualise = GraphTheory()
 
-        # Event object for threading
+        # Create an event object for threading
         self.stop_event = threading.Event()
 
     def main(self):
@@ -732,20 +1091,34 @@ class WindowMaker:
         stats_thread = threading.Thread(target=self.display_stats, daemon=True)
         stats_thread.start()
 
-        # Start the main tkinter window
+        # Start the main tkinter event loop
         self.window.mainloop()
 
-        # Set stop event and wait for stats thread to join
+        # Set the stop event and wait for the stats thread to join
         self.stop_event.set()
         stats_thread.join()
 
     def display_stats(self):
-        # Display CPU and memory utilization stats
+        # Get the current CPU utilization percentage
         cpu_percent = psutil.cpu_percent(interval=None)
+        # Get the current memory utilization percentage
         memory_percent = psutil.virtual_memory().percent
 
+        # Get disk usage statistics
+        disk_usage = psutil.disk_usage('/')
+        disk_percent = disk_usage.percent
+
+        # Get network statistics
+        network_stats = psutil.net_io_counters()
+        sent_bytes = network_stats.bytes_sent
+        received_bytes = network_stats.bytes_recv
+
+        # Print the CPU, memory, disk, and network utilization stats
         print(f"CPU Utilization: {cpu_percent}%")
         print(f"Memory Utilization: {memory_percent}%")
+        print(f"Disk Usage: {disk_percent}%")
+        print(f"Bytes Sent: {sent_bytes}")
+        print(f"Bytes Received: {received_bytes}")
 
         # Schedule the next call to display_stats after 10 seconds
         self.window.after(10000, self.display_stats)
@@ -781,58 +1154,37 @@ class WindowMaker:
         try:
             # Clear the text box
             self.text_box.delete('1.0', tk.END)
+
             # Read the file in binary mode to detect encoding
             with open(self.file_path, 'rb') as f:
                 rawdata = f.read()
+
             # Detect the encoding of the file
             encoding = chardet.detect(rawdata)['encoding']
+
             # Read the CSV file using detected encoding
             df = pd.read_csv(self.file_path, encoding=encoding)
+
             # Insert CSV data into the text box
             self.text_box.insert(tk.END, df.to_string(index=False))
+
             # Store the DataFrame in self.data
             self.data = df
+
             # Enable buttons for sending data to database and ML model, and visualization
             self.send_to_db_button['state'] = tk.NORMAL
             self.send_to_ml_button['state'] = tk.NORMAL
             self.visualize_button['state'] = tk.NORMAL
+            self.upload_button['state'] = tk.NORMAL
         except Exception as e:
             # Handle any errors and print error message
             print("Error:", e)
-
-    # def parse_excel(self, file_path):
-    #     try:
-    #         self.text_box.delete('1.0', tk.END)
-    #         self.sheet_listbox.delete(0, tk.END)
-    #         excel_file = pd.ExcelFile(file_path)
-    #         self.sheet_names = excel_file.sheet_names
-    #         for sheet_name in self.sheet_names:
-    #             self.sheet_listbox.insert(tk.END, sheet_name)
-    #     except Exception as e:
-    #         print("Error parsing Excel file:", e)
-    #
-    # def select_sheet(self, event):
-    #     selected_index = self.sheet_listbox.curselection()
-    #     if selected_index:
-    #         selected_sheet = self.sheet_listbox.get(selected_index)
-    #         excel_file = pd.ExcelFile(self.file_path)
-    #         try:
-    #             df = excel_file.parse(selected_sheet)
-    #             self.text_box.delete('1.0', tk.END)
-    #             self.text_box.insert(tk.END, df.to_string(index=False))
-    #             self.data = df
-    #
-    #             self.send_to_db_button['state'] = tk.NORMAL
-    #             self.send_to_ml_button['state'] = tk.NORMAL
-    #             self.visualize_button['state'] = tk.NORMAL
-    #         except Exception as e:
-    #             print(f"Error parsing sheet '{selected_sheet}':", e)
 
     def send_to_database(self):
         # Send data to database CRUD window
         if self.data is not None:
             # Open CRUD window for database interaction
-            crud_window = CRUDWindow(self.window, self.data, self.db_handler)
+            crud_window = CRUDWindow(self.window, self.data, self.db_handler, self.file_path)
             crud_window.mainloop()
         else:
             print("No file data loaded.")
@@ -963,7 +1315,80 @@ class WindowMaker:
                 messagebox.showerror("Error", f"An error occurred while visualizing the data: {str(e)}")
                 logger.error("Error occurred while visualizing the data.")
 
+    def upload_to_postgresql(self):
+        if self.data is not None:
+            try:
+                # Establish a connection to the PostgreSQL database
+                conn = psycopg2.connect("postgresql://neojoker26:password123@localhost:5432/dissertation")
+                cur = conn.cursor()
+
+                # Generate a unique table name based on the current timestamp
+                file_name = os.path.basename(self.file_path)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                table_name = f"{file_name}_uploaded_{timestamp}"
+
+                # Create a new table to store the CSV data with appropriate data types
+                columns = []
+                for col in self.data.columns:
+                    if self.data[col].dtype == 'object':
+                        columns.append(f"{col} TEXT")
+                    else:
+                        columns.append(f"{col} NUMERIC")
+                columns_def = ', '.join(columns)
+                create_table_query = f"CREATE TABLE {table_name} ({columns_def})"
+                cur.execute(create_table_query)
+
+                # Insert the data into the table
+                insert_query = f"INSERT INTO {table_name} ({', '.join(self.data.columns)}) VALUES ({', '.join(['%s'] * len(self.data.columns))})"
+                for _, row in self.data.iterrows():
+                    cur.execute(insert_query, tuple(row))
+
+                # Commit the transaction and show success message
+                conn.commit()
+                messagebox.showinfo("Success", f"Data uploaded to PostgreSQL successfully. Table name: {table_name}")
+                logger.info(f"Data uploaded to PostgreSQL successfully. Table name: {table_name}")
+            except psycopg2.Error as e:
+                messagebox.showerror("Error", f"An error occurred while uploading data to PostgreSQL: {str(e)}")
+                logger.error(f"An error occurred while uploading data to PostgreSQL: {str(e)}")
+            finally:
+                # Close the cursor and connection after upload, if they are open
+                if cur:
+                    cur.close()
+                if conn:
+                    conn.close()
+        else:
+            messagebox.showwarning("Warning", "No data available to upload.")
+            logger.warning("No data available to upload.")
+
 
 if __name__ == "__main__":
     window = WindowMaker()
     window.main()
+
+# def parse_excel(self, file_path):
+#     try:
+#         self.text_box.delete('1.0', tk.END)
+#         self.sheet_listbox.delete(0, tk.END)
+#         excel_file = pd.ExcelFile(file_path)
+#         self.sheet_names = excel_file.sheet_names
+#         for sheet_name in self.sheet_names:
+#             self.sheet_listbox.insert(tk.END, sheet_name)
+#     except Exception as e:
+#         print("Error parsing Excel file:", e)
+#
+# def select_sheet(self, event):
+#     selected_index = self.sheet_listbox.curselection()
+#     if selected_index:
+#         selected_sheet = self.sheet_listbox.get(selected_index)
+#         excel_file = pd.ExcelFile(self.file_path)
+#         try:
+#             df = excel_file.parse(selected_sheet)
+#             self.text_box.delete('1.0', tk.END)
+#             self.text_box.insert(tk.END, df.to_string(index=False))
+#             self.data = df
+#
+#             self.send_to_db_button['state'] = tk.NORMAL
+#             self.send_to_ml_button['state'] = tk.NORMAL
+#             self.visualize_button['state'] = tk.NORMAL
+#         except Exception as e:
+#             print(f"Error parsing sheet '{selected_sheet}':", e)
