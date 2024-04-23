@@ -25,7 +25,7 @@ from netmiko import ConnectHandler
 import subprocess
 import platform
 import re
-from datetime import datetime
+
 
 # start global logger
 logger = logging.getLogger(__name__)
