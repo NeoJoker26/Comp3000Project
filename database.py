@@ -5,11 +5,22 @@ from models import Banana
 
 Base = declarative_base()
 
+""" this is where all the crud happens, i initialise the db with the url, i then have the option to call on the CRUD
+with main.py from models
+This class basically provides different methods to interact with the database, it will
+create, read, update, delete, get table name, get column names, get bottom/top 100 fields from a column
+count the records, calc the average, find the min and max value in a column
+Seems simple but this took TIME, the documentation for SQLAlchemy is really awful and i dont wish the pain of trying
+to understand it from 1.4 to 2.0 
+Hand written scripts may be easier for someone who has never used SQL before or doesnt know how to exectue scripts or 
+simply is just lazy
+More scripts can be written if the code ever becomes a large scale application 
+"""
 
-# this is where all the crud happens, i initialise the db with the url, i then have the option to call on the CRUD
-# with main.py from models
+
 class DatabaseHandler:
     def __init__(self, db_url):
+        # init the database handler with the url in windowmaker
         self.engine = create_engine(db_url, echo=True)
         self.Session = Session
         Base.metadata.create_all(self.engine)
@@ -105,5 +116,3 @@ class DatabaseHandler:
             column_attr = getattr(Banana, column_name)
             min_row = session.query(Banana).order_by(column_attr.asc()).first()
             return min_row
-
-

@@ -9,7 +9,10 @@ import pandas as pd
 
 columns = []
 
-
+"""
+This is a test file for seeing which machine learning algorithm would be faster, the regressor worked fastest for the 
+excel file provided which was my original testing file but i also wanted to test with csv files which became a priority
+"""
 def open_file():
     try:
         file = pd.read_excel('housing_price_dataset.xlsx', index_col=0)

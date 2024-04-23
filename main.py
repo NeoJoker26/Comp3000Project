@@ -4,14 +4,13 @@ from datetime import datetime
 from tkinter import ttk, filedialog, messagebox
 import numpy as np
 import pandas as pd
-import pyarrow as py
 import chardet
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, explained_variance_score, max_error, mean_squared_log_error, \
-    median_absolute_error
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, explained_variance_score, max_error, \
+    mean_squared_log_error, median_absolute_error
 from sklearn.model_selection import train_test_split, cross_val_predict
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MinMaxScaler
@@ -22,13 +21,33 @@ import psutil
 import threading
 import logging
 import csv
+from netmiko import ConnectHandler
+import subprocess
+import platform
+import re
+from datetime import datetime
 
 # start global logger
 logger = logging.getLogger(__name__)
 
-
 # noinspection PyAttributeOutsideInit
-# CRUD window + Scripts for SQLALchemy/PostgreSQL work
+""" 
+CRUD window + Scripts for SQLALchemy/PostgreSQL work
+This class basically inits the CRUD window (Create, read, update, delete and scripts)
+I wanted the buttons to be universally availble so i set them up in the init, i then created a few modular functions per
+function if that makes sense? 
+I also added a logger and auditor for security purposes, if the user presses a button, the system will log it to the 
+audit file (audit.log)
+Added a colorblind option for the buttons so if the user is colorblind, they can see the buttons
+I also tried to make the error/log messages quite professional as if the app ever does become a large scale application,
+the tech that works with it wont have to worry about the error/log messages, it wont seem like some junior has written
+the error messages and it also lets the tech diagnose the error/log messages
+i.e. if the db isnt connected, error/log shows up, if the db is missing a PK, the tech is notified 
+I wanted to make everything modular so if someone does acquire this app they can easily workout what is what, what is 
+where and how to edit things with ease
+"""
+
+
 class CRUDWindow(tk.Toplevel):
     def __init__(self, parent, data, db_handler, file_path):
         # Call the constructor of the superclass
@@ -39,6 +58,15 @@ class CRUDWindow(tk.Toplevel):
         self.file_path = file_path
         self.colorblind_mode = False  # Flag for colorblind mode
         self.colorblind_type = "None"  # Default colorblind type
+
+        # Create an audit logger
+        self.audit_logger = logging.getLogger('audit')
+        self.audit_logger.setLevel(logging.INFO)
+        audit_handler = logging.FileHandler('audit.log')
+        audit_handler.setLevel(logging.INFO)
+        audit_formatter = logging.Formatter('%(asctime)s - %(message)s')
+        audit_handler.setFormatter(audit_formatter)
+        self.audit_logger.addHandler(audit_handler)
 
         # Set window title and size
         self.title("CRUD Operations")
@@ -124,6 +152,8 @@ class CRUDWindow(tk.Toplevel):
         # Method for setting button colors
         self.set_button_colors(confirm_button, back_button)
 
+        self.audit_logger.info(f"User clicked 'Create' button")
+
     def submit_data(self):
         # Check if all input fields are filled
         if all(entry.get() for entry in self.input_fields):
@@ -167,10 +197,11 @@ class CRUDWindow(tk.Toplevel):
         # every font in the CRUD class
         font_style = ("Helvetica", 12)
 
-        # Label and entry for the banana ID, this is probably the best way i can think of to make this gui,
-        # manual entering instead of searching through an index, this db has 8000 + my own creations but imagine
-        # scrolling through a million, of even more, i will also want to add a feature that searches for the other
-        # criteria but for now this is the only concept i have
+        """ Label and entry for the banana ID, this is probably the best way i can think of to make this gui,
+         manual entering instead of searching through an index, this db has 8000 + my own creations but imagine
+        scrolling through a million, of even more, i will also want to add a feature that searches for the other
+         criteria but for now this is the only concept i have
+        """
         banana_id_label = tk.Label(update_frame, text="Enter Banana ID:", font=font_style)
         banana_id_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
@@ -187,6 +218,8 @@ class CRUDWindow(tk.Toplevel):
         back_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10)
 
         self.set_button_colors(confirm_button, back_button)
+
+        self.audit_logger.info(f"User clicked 'Update' button")
 
     def show_update_form(self, banana_id):
         # check if banana ID is provided
@@ -311,6 +344,8 @@ class CRUDWindow(tk.Toplevel):
 
         self.set_button_colors(confirm_button, back_button)
 
+        self.audit_logger.info(f"User clicked 'Delete' button")
+
     def delete_banana(self, banana_id):
         # Delete data from the CSV file and database
         if banana_id:
@@ -394,6 +429,7 @@ class CRUDWindow(tk.Toplevel):
                 if banana_data:
                     banana_data_str = "\n".join([f"{key}: {value}" for key, value in banana_data.__dict__.items()])
                     self.banana_data_label.config(text=banana_data_str)
+                    self.audit_logger.info(f"User clicked 'Read' button with Banana ID: {banana_id}")
                     self.banana_data_label.grid()  # Show the label
                 else:
                     self.banana_data_label.grid_remove()  # Hide the label
@@ -465,7 +501,8 @@ class CRUDWindow(tk.Toplevel):
         table_var.set(table_names[0])  # Set the default selected table
         table_dropdown['menu'].delete(0, 'end')
         for table in table_names:
-            #tk._setit is a method in Tkinter used to associate a variable with a value when an option is chosen from a dropdown menu.
+            # tk._setit is a method in Tkinter used to associate a variable with a value when an option is chosen
+            # from a dropdown menu.
             table_dropdown['menu'].add_command(label=table, command=tk._setit(table_var, table))
 
         # used args to accept a number of positional arguments
@@ -494,9 +531,11 @@ class CRUDWindow(tk.Toplevel):
                 table_name = table_var.get()
                 column_name = column_var.get()
 
+                # Audit log the selected script
+                self.audit_logger.info(f"User ran script: {selected_script}")
+
                 if selected_script == "Show bottom 100":
                     result = self.db_handler.show_bottom_100(table_name)
-
                     # Format the result as a string
                     formatted_result = '\n'.join(str(banana) for banana in result)
                     result_text.delete('1.0', tk.END)
@@ -565,11 +604,15 @@ class CRUDWindow(tk.Toplevel):
                 self.set_button_colors(widget)
 
 
-# this function is created to show different types of relationships that the csv file may have, it creates histograms
-# based of the input, makes a heatmap, pairplot and more can be made however, i limited it to just these to 1) not
-# overwhelm the person but 2) as a potential change, i could make a new child GUI, put buttons in and make it create
-# different graphs based of different inputs e.g. if i want a bar chart of x and y, the user would be able to select
-# that from the file and print it with a button, but this is just a concept for the time being
+""" 
+this function is created to show different types of relationships that the csv file may have, it creates histograms
+#based of the input, makes a heatmap, pairplot and more can be made however, i limited it to just these to 1) not
+#overwhelm the person but 2) as a potential change, i could make a new child GUI, put buttons in and make it create
+ different graphs based of different inputs e.g. if i want a bar chart of x and y, the user would be able to select
+ that from the file and print it with a button, but this is just a concept for the time being
+"""
+
+
 class GraphSelectionWindow(tk.Toplevel):
     def __init__(self, parent, headers):
         super().__init__(parent)
@@ -614,7 +657,9 @@ class GraphSelectionWindow(tk.Toplevel):
 
         graph_types = ["Histogram", "Line Plot", "Scatter Plot", "Box Plot", "Pair Plot", "Heatmap"]
         for i, graph in enumerate(graph_types):
-            ttk.Radiobutton(graph_type_frame, text=graph, variable=self.graph_type, value=graph.lower()).grid(row=i+1, column=0, sticky="w")
+            ttk.Radiobutton(graph_type_frame, text=graph, variable=self.graph_type, value=graph.lower()).grid(row=i + 1,
+                                                                                                              column=0,
+                                                                                                              sticky="w")
 
         # Create visualize and cancel buttons
         self.visualize_button = ttk.Button(button_frame, text="Visualize")
@@ -647,6 +692,17 @@ class GraphSelectionWindow(tk.Toplevel):
         self.destroy()
 
 
+"""
+This class is where i use seaborn and matplotlib to make different graphs based of different inputs
+i could add alot more however too many graphs may be counter intuitive 
+I also set it to a min of 2 so that the user can compare different graphs based of different inputs as opposed to just 
+visualsing one graph and having less data (as the aim of this app is to show relationships between different columns in 
+a database/file
+once again i tried to make the error messages professional and added a logger so that once again, if there is a tech
+they can see what is going wrong or if not a tech then a user
+"""
+
+
 class GraphTheory:
     def __init__(self):
         self.data = None
@@ -656,7 +712,7 @@ class GraphTheory:
         try:
             if self.data is not None:
                 # Create a Figure object, set to large size but open to change for user preference
-                fig = Figure(figsize=(8, 8), dpi=100)
+                fig = Figure(figsize=(6, 4), dpi=100)
                 # Add a subplot to the figure
                 ax = fig.add_subplot(111)
 
@@ -664,7 +720,8 @@ class GraphTheory:
                 data = pd.DataFrame(self.data[column], columns=[column])
 
                 # create hisogram with seaborn, set some specifics but once again, open to user preference
-                sns.histplot(data=data, x=column, ax=ax, kde=True, color='skyblue', bins=20, edgecolor='black', alpha=0.7)
+                sns.histplot(data=data, x=column, ax=ax, kde=True, color='skyblue', bins=20, edgecolor='black',
+                             alpha=0.7)
                 ax.set_xlabel(column)
                 ax.set_ylabel('Frequency')
                 ax.set_title(f'Histogram of {column}')
@@ -698,7 +755,8 @@ class GraphTheory:
                 # Convert the data to a DataFrame
                 data = pd.DataFrame(self.data[[x_column, y_column]])
 
-                sns.lineplot(x=x_column, y=y_column, data=data, ax=ax, color='blue', linewidth=2, marker='o', markersize=6)
+                sns.lineplot(x=x_column, y=y_column, data=data, ax=ax, color='blue', linewidth=2, marker='o',
+                             markersize=6)
                 ax.set_xlabel(x_column)
                 ax.set_ylabel(y_column)
                 ax.set_title(f'Line Plot of {y_column} against {x_column}')
@@ -736,7 +794,8 @@ class GraphTheory:
                 if hue_column is None:
                     sns.scatterplot(x=x_column, y=y_column, data=data, ax=ax, color='darkblue', s=60, alpha=0.7)
                 else:
-                    sns.scatterplot(x=x_column, y=y_column, hue=hue_column, data=data, ax=ax, palette='viridis', s=60, alpha=0.7)
+                    sns.scatterplot(x=x_column, y=y_column, hue=hue_column, data=data, ax=ax, palette='viridis', s=60,
+                                    alpha=0.7)
                     ax.legend(title=hue_column, loc='upper right')
 
                 ax.set_xlabel(x_column)
@@ -745,7 +804,8 @@ class GraphTheory:
 
                 # Add value labels to data points
                 for _, row in data.iterrows():
-                    ax.text(row[x_column], row[y_column], f'({row[x_column]:.2f}, {row[y_column]:.2f})', fontsize=8, ha='left', va='bottom')
+                    ax.text(row[x_column], row[y_column], f'({row[x_column]:.2f}, {row[y_column]:.2f})', fontsize=8,
+                            ha='left', va='bottom')
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -780,7 +840,8 @@ class GraphTheory:
                 q1, median, q3 = quartiles[0.25], quartiles[0.5], quartiles[0.75]
                 iqr = q3 - q1
                 ax.text(0.95, 0.95, f'Median: {median:.2f}\nQ1: {q1:.2f}, Q3: {q3:.2f}\nIQR: {iqr:.2f}',
-                        transform=ax.transAxes, fontsize=10, ha='right', va='top', bbox=dict(facecolor='white', alpha=0.8))
+                        transform=ax.transAxes, fontsize=10, ha='right', va='top',
+                        bbox=dict(facecolor='white', alpha=0.8))
 
                 canvas = FigureCanvasTkAgg(fig, master=graph_window)
                 canvas.draw()
@@ -819,7 +880,8 @@ class GraphTheory:
                 ax = fig.add_subplot(111)
 
                 corr_matrix = self.data.corr()
-                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax, fmt='.2f', linewidths=0.5, annot_kws={"fontsize": 10})
+                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax, fmt='.2f', linewidths=0.5,
+                            annot_kws={"fontsize": 10})
                 ax.set_title('Correlation Heatmap')
 
                 # Add a color bar
@@ -835,6 +897,15 @@ class GraphTheory:
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while creating the correlation heatmap: {str(e)}")
             logger.error(f"An error occurred while creating the correlation heatmap: {str(e)}")
+
+
+"""
+This is the neural network, it took alot of tinkering to make it efficient and have good metrics
+in this case, the concept file is used but whoever uses this application can simply change a few variables to adjust it 
+to their goals
+it is used for regressive tasks e.g., house price prediction or energy consumption prediction
+however, a classifier could also be implemented with similar parameters
+"""
 
 
 class PredictionAlgorithm:
@@ -990,10 +1061,13 @@ class PredictionAlgorithm:
         print(f"Cross-Validation R-squared Score: {r2_cv:.7f}")
 
 
-# this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
-# for the buttons are in modular functions, it took a while to design a good gui as i used a treeview at first but
-# then i realised how laggy it was and how awful the scroll bars were so i removed it and just left it as a label,
-# in theory i could've used a decorator or some sort of inbuilt function but for ease for slower systems, i used a label
+"""
+ this is the main window, ive set it up like i did CRUD window, the main buttons are in the init and all the actions
+ for the buttons are in modular functions, it took a while to design a good gui as i used a treeview at first but
+ then i realised how laggy it was and how awful the scroll bars were so i removed it and just left it as a label,
+"""
+
+
 class WindowMaker:
     def __init__(self):
         # Configure pandas display options
@@ -1032,20 +1106,29 @@ class WindowMaker:
         self.open_button.grid(row=0, column=0, padx=5)
 
         # Create the "Send to Database" button (initially disabled)
-        self.send_to_db_button = ttk.Button(self.button_frame, text="Send to Database", command=self.send_to_database, state=tk.DISABLED)
+        self.send_to_db_button = ttk.Button(self.button_frame, text="Send to Database", command=self.send_to_database,
+                                            state=tk.DISABLED)
         self.send_to_db_button.grid(row=0, column=1, padx=5)
 
         # Create the "Send to Machine Learning" button (initially disabled)
-        self.send_to_ml_button = ttk.Button(self.button_frame, text="Send to Machine Learning", command=self.send_to_ml, state=tk.DISABLED)
+        self.send_to_ml_button = ttk.Button(self.button_frame, text="Send to Machine Learning", command=self.send_to_ml,
+                                            state=tk.DISABLED)
         self.send_to_ml_button.grid(row=0, column=2, padx=5)
 
         # Create the "Visualize" button (initially disabled)
-        self.visualize_button = ttk.Button(self.button_frame, text="Visualize", command=self.visualize_data, state=tk.DISABLED)
+        self.visualize_button = ttk.Button(self.button_frame, text="Visualize", command=self.visualize_data,
+                                           state=tk.DISABLED)
         self.visualize_button.grid(row=0, column=3, padx=5)
 
         # Create the "Upload to PostgreSQL" button (initially disabled)
-        self.upload_button = ttk.Button(self.button_frame, text="Upload to PostgreSQL", command=self.upload_to_postgresql, state=tk.DISABLED)
+        self.upload_button = ttk.Button(self.button_frame, text="Upload to PostgreSQL",
+                                        command=self.upload_to_postgresql, state=tk.DISABLED)
         self.upload_button.grid(row=0, column=4, padx=5)
+
+        # Create VLAN Configuration button
+        self.vlan_config_button = ttk.Button(self.button_frame, text="VLAN Configuration",
+                                             command=self.configure_vlan_tagging, state=tk.DISABLED)
+        self.vlan_config_button.grid(row=0, column=5, padx=5)
 
         # Create a label to display the selected file name
         self.label_filename = ttk.Label(self.file_info_frame, text="No file selected")
@@ -1086,7 +1169,202 @@ class WindowMaker:
         # Create an event object for threading
         self.stop_event = threading.Event()
 
+        # Create an audit logger
+        self.audit_logger = logging.getLogger('audit')
+        self.audit_logger.setLevel(logging.INFO)
+        audit_handler = logging.FileHandler('audit.log')
+        audit_handler.setLevel(logging.INFO)
+        audit_formatter = logging.Formatter('%(asctime)s - %(message)s')
+        audit_handler.setFormatter(audit_formatter)
+        self.audit_logger.addHandler(audit_handler)
+
+    """
+    this is a static method that does take a bit to load however, the reason this is here is just incase this application
+    is moved from one set of hardware to another e.g., from a linux server to solaris or some type of oracle server
+    rack 
+    it gatheres the user set up which would let a technician optimise the application for the bespoke hardware if need be
+    it lists all connections and such so that is a VLAn is needed, the technician can set one up (or even the user if 
+    need be)
+    """
+
+    @staticmethod
+    def run_hardware_tests():
+        messagebox.showinfo('Testing', 'Running hardware tests, please bare with the application for a moment')
+        try:
+            # Get operating system information
+            os_name = platform.system()
+            os_version = platform.release()
+            logger.info(f'Operating System: {os_name} {os_version}')
+            print(f'Operating System: {os_name} {os_version}')
+
+            # Get CPU information
+            cpu_info = psutil.cpu_freq()
+            logger.info(f'CPU Information:')
+            logger.info(f'  Frequency: {cpu_info.current:.2f} MHz')
+            logger.info(f'  Core Count: {psutil.cpu_count()}')
+            print(f'CPU Information:')
+            print(f'  Frequency: {cpu_info.current:.2f} MHz')
+            print(f'  Core Count: {psutil.cpu_count()}')
+
+            # Get memory information
+            memory_info = psutil.virtual_memory()
+            logger.info(f'Memory Information:')
+            logger.info(f'  Total: {memory_info.total / (1024 * 1024):.2f} MB')
+            logger.info(f'  Available: {memory_info.available / (1024 * 1024):.2f} MB')
+            print(f'Memory Information:')
+            print(f'  Total: {memory_info.total / (1024 * 1024):.2f} MB')
+            print(f'  Available: {memory_info.available / (1024 * 1024):.2f} MB')
+
+            # Get disk information
+            disk_info = psutil.disk_partitions()
+            logger.info(f'Disk Information:')
+            for partition in disk_info:
+                logger.info(f'  Device: {partition.device}')
+                logger.info(f'  Mountpoint: {partition.mountpoint}')
+                logger.info(f'  File System Type: {partition.fstype}')
+                usage = psutil.disk_usage(partition.mountpoint)
+                logger.info(f'  Total Size: {usage.total / (1024 * 1024):.2f} MB')
+                logger.info(f'  Used Space: {usage.used / (1024 * 1024):.2f} MB')
+                logger.info(f'  Free Space: {usage.free / (1024 * 1024):.2f} MB')
+                print(f'  Device: {partition.device}')
+                print(f'  Mountpoint: {partition.mountpoint}')
+                print(f'  File System Type: {partition.fstype}')
+                print(f'  Total Size: {usage.total / (1024 * 1024):.2f} MB')
+                print(f'  Used Space: {usage.used / (1024 * 1024):.2f} MB')
+                print(f'  Free Space: {usage.free / (1024 * 1024):.2f} MB')
+
+            # Get network information
+            network_info = psutil.net_if_addrs()
+            logger.info(f'Network Information:')
+            for interface, addrs in network_info.items():
+                logger.info(f'  Interface: {interface}')
+                for addr in addrs:
+                    if addr.family == 2:  # AF_INET (IPv4)
+                        logger.info(f'    IP Address: {addr.address}')
+                        logger.info(f'    Netmask: {addr.netmask}')
+                        logger.info(f'    Broadcast: {addr.broadcast}')
+                        print(f'  Interface: {interface}')
+                        print(f'    IP Address: {addr.address}')
+                        print(f'    Netmask: {addr.netmask}')
+                        print(f'    Broadcast: {addr.broadcast}')
+
+            # Run network topology check
+            if os_name == 'Windows':
+                topology_output = subprocess.check_output(['tracert', 'google.com'])
+            else:
+                topology_output = subprocess.check_output(['traceroute', 'google.com'])
+            logger.info('Network Topology:')
+            logger.info(topology_output.decode('utf-8'))
+            print('Network Topology:')
+            print(topology_output.decode('utf-8'))
+
+            # Run VLAN tagging check
+            if os_name == 'Windows':
+                vlan_output = subprocess.check_output(['netsh', 'interface', 'ip', 'show', 'interfaces'])
+            else:
+                vlan_output = subprocess.check_output(['cat', '/proc/net/vlan/config'])
+            logger.info('VLAN Tagging:')
+            logger.info(vlan_output.decode('utf-8'))
+            print('VLAN Tagging:')
+            print(vlan_output.decode('utf-8'))
+
+
+        except Exception as e:
+            logger.error(f'Hardware test failed: {str(e)}')
+            messagebox.showerror('Hardware Tests', 'Hardware tests failed')
+
+        if platform.system() == 'Linux':
+            try:
+                # Run CPU stress test
+                try:
+                    cpu_test_output = subprocess.check_output(['stress-ng', '--cpu', '4', '--timeout', '30s'])
+                    logger.info('CPU stress test completed')
+                    logger.info(cpu_test_output.decode('utf-8'))
+                    print('CPU stress test completed\n', cpu_test_output.decode('utf-8'))
+                except FileNotFoundError:
+                    logger.warning('stress-ng command not found. Skipping CPU stress test.')
+
+                # Run memory test
+                try:
+                    memory_test_output = subprocess.check_output(['memtester', '1M', '1'])
+                    logger.info('Memory test completed')
+                    logger.info(memory_test_output.decode('utf-8'))
+                    print('Memory test completed\n', memory_test_output.decode('utf-8'))
+                except FileNotFoundError:
+                    logger.warning('memtester command not found. Skipping memory test.')
+
+                # Run disk test
+                try:
+                    disk_test_output = subprocess.check_output(['smartctl', '-t', 'short', '/dev/sda'])
+                    logger.info('Disk test completed')
+                    logger.info(disk_test_output.decode('utf-8'))
+                    print('Disk test completed\n', disk_test_output.decode('utf-8'))
+                except FileNotFoundError:
+                    logger.warning('smartctl command not found. Skipping disk test.')
+
+                # Run network test
+                try:
+                    network_test_output = subprocess.check_output(['ping', '-c', '4', 'google.com'])
+                    logger.info('Network test completed')
+                    logger.info(network_test_output.decode('utf-8'))
+                    print('Network test completed\n', network_test_output.decode('utf-8'))
+                except FileNotFoundError:
+                    logger.warning('ping command not found. Skipping network test.')
+
+                messagebox.showinfo('Hardware Tests', 'Hardware tests completed')
+            except subprocess.CalledProcessError as e:
+                logger.error(f'Hardware test failed: {str(e)}')
+                messagebox.showerror('Hardware Tests', 'Hardware tests failed')
+
+        elif platform.system() == 'Windows':
+            try:
+                # Run CPU stress test
+                try:
+                    cpu_test_output = subprocess.check_output(['wmic', 'cpu', 'get', 'LoadPercentage'])
+                    logger.info('CPU stress test completed')
+                    logger.info(cpu_test_output.decode('utf-8'))
+                    print('CPU stress test completed\n', cpu_test_output.decode('utf-8'))
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f'CPU stress test failed: {str(e)}')
+
+                # Run memory test
+                try:
+                    memory_test_output = subprocess.check_output(['wmic', 'memorychip', 'get', 'Capacity'])
+                    logger.info('Memory test completed')
+                    logger.info(memory_test_output.decode('utf-8'))
+                    print('Memory test completed\n', memory_test_output.decode('utf-8'))
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f'Memory test failed: {str(e)}')
+
+                # Run disk test
+                try:
+                    disk_test_output = subprocess.check_output(['wmic', 'diskdrive', 'get', 'Status'])
+                    logger.info('Disk test completed')
+                    logger.info(disk_test_output.decode('utf-8'))
+                    print('Disk test completed\n', disk_test_output.decode('utf-8'))
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f'Disk test failed: {str(e)}')
+
+                # Run network test
+                try:
+                    network_test_output = subprocess.check_output(['ping', '-n', '4', 'google.com'])
+                    logger.info('Network test completed')
+                    logger.info(network_test_output.decode('utf-8'))
+                    print('Network test completed\n', network_test_output.decode('utf-8'))
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f'Network test failed: {str(e)}')
+
+                messagebox.showinfo('Hardware Tests', 'Hardware tests completed')
+            except Exception as e:
+                logger.error(f'Hardware test failed: {str(e)}')
+                messagebox.showerror('Hardware Tests', 'Hardware tests failed')
+        else:
+            messagebox.showinfo('Hardware Tests', 'Hardware tests are only supported on Linux and Windows.')
+
     def main(self):
+        # Run hardware tests before starting the main application, does take a few seconds to run
+        self.run_hardware_tests()
+
         # Start a thread for displaying stats
         stats_thread = threading.Thread(target=self.display_stats, daemon=True)
         stats_thread.start()
@@ -1149,6 +1427,8 @@ class WindowMaker:
             messagebox.showerror("Error", f"Error occurred  {str(e)}")
             logger.error(f"Error occurred: {str(e)}")
 
+        self.audit_logger.info(f"User opened file: {self.file_path}")
+
     def parse_csv(self):
         # Parse CSV file and display content in text box
         try:
@@ -1171,11 +1451,14 @@ class WindowMaker:
             # Store the DataFrame in self.data
             self.data = df
 
-            # Enable buttons for sending data to database and ML model, and visualization
+            # Enable buttons for sending data to database, ML model, visualization and uploading to postgreSQL
             self.send_to_db_button['state'] = tk.NORMAL
             self.send_to_ml_button['state'] = tk.NORMAL
             self.visualize_button['state'] = tk.NORMAL
             self.upload_button['state'] = tk.NORMAL
+
+            # this wont work as this is a concept idea
+            self.vlan_config_button['state'] = tk.NORMAL
         except Exception as e:
             # Handle any errors and print error message
             print("Error:", e)
@@ -1190,6 +1473,8 @@ class WindowMaker:
             print("No file data loaded.")
             logger.info("No file data loaded.")
 
+        self.audit_logger.info(f"User sent data to database")
+
     def send_to_ml(self):
         # Send data to ML model for evaluation
         if self.data is not None:
@@ -1199,6 +1484,8 @@ class WindowMaker:
         else:
             print("No file data loaded.")
             logger.info("No file data loaded.")
+
+        self.audit_logger.info(f"User sent data to machine learning model")
 
     def visualize_data(self):
         # Visualize data using graph selection window
@@ -1212,6 +1499,8 @@ class WindowMaker:
             print("No file data loaded.")
             logger.info("No file data loaded.")
 
+        self.audit_logger.info(f"User clicked 'Visualize' button")
+
     def create_graph(self, graph_selection_window):
         # Create graph based on selected headers and graph type
         selected_headers = graph_selection_window.selected_headers
@@ -1223,6 +1512,11 @@ class WindowMaker:
 
             # Analyze selected variables and provide suggestions
             suggestions = []
+            """
+            Reasearch into this was interesting which actually taught me some maths
+            I tried to make this sound professional so that once again, if need be the user can understand better
+            how to use the application or how to query for relationships between columns 
+            """
 
             if len(selected_headers) == 1:
                 # Univariate analysis suggestions
@@ -1325,6 +1619,10 @@ class WindowMaker:
                 # Generate a unique table name based on the current timestamp
                 file_name = os.path.basename(self.file_path)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                # Remove invalid characters and replace them with underscores
+                # the name can be changed in postgreSQL later on
+                file_name = re.sub(r'[^a-zA-Z0-9]', '_', file_name)
                 table_name = f"{file_name}_uploaded_{timestamp}"
 
                 # Create a new table to store the CSV data with appropriate data types
@@ -1359,6 +1657,102 @@ class WindowMaker:
         else:
             messagebox.showwarning("Warning", "No data available to upload.")
             logger.warning("No data available to upload.")
+
+        self.audit_logger.info(f"User uploaded data to PostgreSQL")
+
+    """
+    This will not work unless needed, for example if the user were to use VLAN tagging on a network switch
+    I've set it up so that the user could just change the dummy device metadata and adjust it for their device
+    an error message will appear that shows ALL of the devices possible (both CLI and messagebox) so that the user knows
+    which devices are compatible with VLAN tagging
+    I have also set up a SSH command to connect to the "network switch" device
+    I've also added a logger if the user does use this which is stored in "vlan_tagging.log" however this will most
+    likely remain empty
+    """
+    @staticmethod
+    def configure_vlan_tagging(self):
+        # Netmiko configuration for VLAN tagging
+        try:
+            # Configure logger to write logs to a file
+            file_handler = logging.FileHandler('vlan_tagging.log')
+            file_handler.setLevel(logging.DEBUG)
+            # Define device parameters for your network switch
+            device = {
+                'device_type': 'some_type_of_device_maybe_cisco',
+                'host': 'switch_ip_address',
+                'username': 'network_manager_username/sysadmin_username/whatever_role_username',
+                'password': 'network_manager_password/sysadmin_password/whatever_role_password',
+                'secret': 'network_manager_password/sysadmin_password/whatever_role_password'
+            }
+
+            #  SSH command to connect to the "network" switch
+            # ssh_command = [
+            #     'ssh',
+            #     f"{device['username']}@{device['host']}",
+            #
+            #     # Disable strict host key checking
+            #     '-o', 'StrictHostKeyChecking=no',
+            #     # Disable known hosts file
+            #     '-o', 'UserKnownHostsFile=/dev/null',
+            #     # Enable password authentication
+            #     '-o', 'PasswordAuthentication=yes',
+            #     '-o', 'KexAlgorithms=+diffie-hellman-group1-sha1',
+            # ]
+            #
+            # # Send commands to the SSH process
+            # commands = [
+            #     'enable',  # Enter privileged exec mode
+            #     'configure terminal',  # Enter global configuration mode
+            #     'vlan 10',  # Create VLAN with ID 10
+            #     'name VLAN_10',  # Assign a name to the VLAN
+            #     'interface Ethernet1/1',  # Enter interface configuration mode for a specific interface
+            #     'switchport mode access',  # Set the interface to access mode
+            #     'switchport access vlan 10',  # Assign the VLAN to the interface
+            #     'no shutdown',  # Enable the interface
+            #     'end',  # Exit from global configuration mode
+            #     'write memory',  # Save the configuration
+            #     'exit',  # Exit from the SSH session
+            # ]
+
+            # Connect to the network switch
+            with ConnectHandler(**device) as net_connect:
+                # Enter privileged exec mode
+                net_connect.enable()
+
+                # Example configuration for VLAN tagging
+                # all of this is fake until actually put into a VLAN setup
+
+                vlan_id = '10'
+                interface = 'Ethernet1/1'
+                vlan_name = 'VLAN_10'
+
+                # Create VLAN
+                create_vlan_command = f'vlan {vlan_id}; name {vlan_name}'
+                output = net_connect.send_config_set(create_vlan_command)
+                logger.info(f"Create VLAN command output: {output}")
+
+                # Configure VLAN on the interface
+                interface_config_commands = [
+                    f'interface {interface}',
+                    'switchport mode access',
+                    f'switchport access vlan {vlan_id}',
+                    'no shutdown'
+                ]
+                output = net_connect.send_config_set(interface_config_commands)
+                logger.info(f"Interface configuration output: {output}")
+
+                # Save the configuration
+                save_command = 'write memory'
+                output = net_connect.send_command(save_command)
+                logger.info(f"Save configuration output: {output}")
+
+                messagebox.showinfo("Success", "VLAN configuration completed successfully.")
+                print(output)
+        except Exception as e:
+            # Handle any errors that occur during VLAN tagging configuration
+            error_message = f"Error occurred during VLAN tagging configuration: {str(e)}"
+            messagebox.showerror("Error", error_message)
+            logger.error(error_message)
 
 
 if __name__ == "__main__":
