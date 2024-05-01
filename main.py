@@ -2,6 +2,8 @@ import os
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk, filedialog, messagebox
+
+import netifaces
 import numpy as np
 import pandas as pd
 import chardet
@@ -25,7 +27,6 @@ from netmiko import ConnectHandler
 import subprocess
 import platform
 import re
-
 
 # start global logger
 logger = logging.getLogger(__name__)
@@ -1363,11 +1364,17 @@ class WindowMaker:
 
     def main(self):
         # Run hardware tests before starting the main application, does take a few seconds to run
-        self.run_hardware_tests()
+        # self.run_hardware_tests()
 
         # Start a thread for displaying stats
         stats_thread = threading.Thread(target=self.display_stats, daemon=True)
         stats_thread.start()
+
+        # Call the setup_replication() method
+        self.db_handler.setup_replication()
+
+        # Call the perform_backup() method
+        self.db_handler.perform_backup()
 
         # Start the main tkinter event loop
         self.window.mainloop()
@@ -1669,7 +1676,7 @@ class WindowMaker:
     I've also added a logger if the user does use this which is stored in "vlan_tagging.log" however this will most
     likely remain empty
     """
-    @staticmethod
+
     def configure_vlan_tagging(self):
         # Netmiko configuration for VLAN tagging
         try:
@@ -1753,6 +1760,31 @@ class WindowMaker:
             error_message = f"Error occurred during VLAN tagging configuration: {str(e)}"
             messagebox.showerror("Error", error_message)
             logger.error(error_message)
+
+
+    def setup_network_bonding(self):
+        # Configure network bonding for increased bandwidth and fault tolerance
+        interfaces = netifaces.interfaces()
+        bond_interface = "bond_example"
+
+        # Create bond interface
+        subprocess.run(["ip", "link", "add", bond_interface, "type", "bond"])
+
+        # Add network interfaces to the bond
+        for interface in interfaces:
+            if interface.startswith("eth"):
+                subprocess.run(["ip", "link", "set", interface, "master", bond_interface])
+
+        # Configure bond mode and other bonding options
+        subprocess.run(["ip", "link", "set", bond_interface, "type", "bond", "mode", "802.3ad"])
+
+        # Assign IP address to the bond interface
+        subprocess.run(["ip", "addr", "add", "192.168.0.100/x", "dev", bond_interface])
+
+        # Bring up the bond interface
+        subprocess.run(["ip", "link", "set", bond_interface, "up"])
+
+        print("Network bonding configured successfully.")
 
 
 if __name__ == "__main__":

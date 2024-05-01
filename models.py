@@ -1,4 +1,5 @@
-from sqlalchemy import Float, String
+from sqlalchemy import Float, String, func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 from base import Base
 
@@ -31,6 +32,8 @@ __table_args__ = (
     )
 where this would apply for a product catalog or something of the sort
 """
+
+
 class Banana(Base):
     # the table name, but this can be anything as it is a concept
     __tablename__ = "banana_quality"
@@ -45,6 +48,14 @@ class Banana(Base):
     ripeness: Mapped[float] = mapped_column(Float)
     acidity: Mapped[float] = mapped_column(Float)
     quality: Mapped[str] = mapped_column(String(10))
+
+    @hybrid_property
+    def masked_quality(self):
+        return func.concat('X' * (func.length(self.quality) - 2), func.substr(self.quality, -2, 2))
+
+    @masked_quality.expression
+    def masked_quality(cls):
+        return func.concat('X' * (func.length(cls.quality) - 2), func.substr(cls.quality, -2, 2))
 
     def __repr__(self):
         # represent the obj as a string

@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from sqlalchemy import create_engine, func, text, inspect, column, alias, MetaData, Table, select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
@@ -116,3 +119,61 @@ class DatabaseHandler:
             column_attr = getattr(Banana, column_name)
             min_row = session.query(Banana).order_by(column_attr.asc()).first()
             return min_row
+
+    def setup_replication(self):
+        # high availability
+        try:
+            # create db command
+            subprocess.run(["createdb", "replicated_database"])
+            with open("postgresql.conf", "a") as conf_file:
+                # open conf file and set to replica (enable replication basically)
+                conf_file.write("\n# Replication settings\n")
+                conf_file.write("wal_level = replica\n")
+                conf_file.write("max_wal_senders = 10\n")
+                conf_file.write("wal_keep_size = 1GB\n")
+
+            with self.engine.connect() as conn:
+                # postgres replication
+                conn.execute(text("SELECT * FROM pg_create_physical_replication_slot('replicated_database');"))
+
+            subprocess.run(["pg_ctl", "-D", "/path/to/standby/data", "start"])
+
+            print("Database replication setup completed.")
+        except Exception as e:
+            print(f"Error setting up database replication: {str(e)}")
+
+    def perform_backup(self):
+        try:
+            # Execute pg_dump command to create a dump of the dissertation database
+            backup_file = "dissertation_backup.sql"
+            subprocess.run(["pg_dump", "dissertation", "-f", backup_file])
+
+            compressed_file = "dissertation_backup.tar.gz"
+            subprocess.run(["tar", "-czvf", compressed_file, backup_file])
+
+            # Generate a random encryption key
+            encryption_key = os.urandom(32)
+
+            # Encrypt the backup file using AES-256-GCM
+            encrypted_file = f"{compressed_file}.enc"
+            subprocess.run(
+                ["openssl", "enc", "-aes-256-gcm", "-salt", "-in", compressed_file, "-out", encrypted_file,
+                 "-pass", f"pass:{encryption_key.hex()}"]
+            )
+
+            # Generate a checksum of the encrypted backup file
+            checksum = subprocess.check_output(["sha256sum", encrypted_file]).decode().split()[0]
+
+            secure_location = "/path/to/secure/backup/location"
+            subprocess.run(["mv", encrypted_file, secure_location])
+
+            # Store the encryption key and checksum securely
+            key_location = "/path/to/secure/key/location"
+            with open(os.path.join(key_location, "encryption_key.txt"), "w") as key_file:
+                key_file.write(encryption_key.hex())
+            with open(os.path.join(key_location, "backup_checksum.txt"), "w") as checksum_file:
+                checksum_file.write(checksum)
+
+            print("Database backup completed.")
+        except Exception as e:
+            print(f"Error performing database backup: {str(e)}")
