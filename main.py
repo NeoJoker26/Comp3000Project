@@ -1761,7 +1761,6 @@ class WindowMaker:
             messagebox.showerror("Error", error_message)
             logger.error(error_message)
 
-
     def setup_network_bonding(self):
         # Configure network bonding for increased bandwidth and fault tolerance
         interfaces = netifaces.interfaces()
@@ -1785,6 +1784,45 @@ class WindowMaker:
         subprocess.run(["ip", "link", "set", bond_interface, "up"])
 
         print("Network bonding configured successfully.")
+
+    def setup_rdm(self):
+        # Create an RDM
+        rdm_id = self.db_handler.create_rdm(
+            service_name="Test Service",
+            ip_address="192.168.0.1",
+            port=8080,
+            service_type="API",
+            resource_availability="Available"
+        )
+        print(f"Created RDM with ID: {rdm_id}")
+
+        # Get the created RDM by ID
+        rdm = self.db_handler.get_rdm_by_id(rdm_id)
+        print("Retrieved RDM:", rdm)
+
+        # Update the RDM
+        updated = self.db_handler.update_rdm(
+            rdm_id,
+            service_name="Updated Test Service",
+            resource_availability="Busy"
+        )
+        if updated:
+            print("RDM updated successfully")
+        else:
+            print("Failed to update RDM")
+
+        # Get all RDMs
+        rdms = self.db_handler.get_all_rdms()
+        print("All RDMs:")
+        for rdm in rdms:
+            print(rdm)
+
+        # Delete the RDM
+        deleted = self.db_handler.delete_rdm(rdm_id)
+        if deleted:
+            print("RDM deleted successfully")
+        else:
+            print("Failed to delete RDM")
 
 
 if __name__ == "__main__":

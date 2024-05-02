@@ -1,4 +1,6 @@
-from sqlalchemy import Float, String, func
+import datetime
+
+from sqlalchemy import Float, String, func, DateTime
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 from base import Base
@@ -60,3 +62,18 @@ class Banana(Base):
     def __repr__(self):
         # represent the obj as a string
         return f"Banana(banana_id={self.banana_id!r}, size={self.size!r}, weight={self.weight!r}, sweetness={self.sweetness!r}, softness={self.softness!r}, harvest_time={self.harvest_time!r}, ripeness={self.ripeness!r}, acidity={self.acidity!r}, quality={self.quality!r})"
+
+
+class RDM(Base):
+    __tablename__ = 'rdm'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    service_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    ip_address: Mapped[str] = mapped_column(String(50), nullable=False)
+    port: Mapped[int] = mapped_column(nullable=False)
+    service_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    resource_availability: Mapped[str] = mapped_column(String(100), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<RDM(id={self.id}, service_name='{self.service_name}', ip_address='{self.ip_address}', port={self.port}, service_type='{self.service_type}', resource_availability='{self.resource_availability}', timestamp='{self.timestamp}')>"

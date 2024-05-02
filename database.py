@@ -1,3 +1,4 @@
+import datetime
 import os
 import subprocess
 
@@ -5,6 +6,7 @@ from sqlalchemy import create_engine, func, text, inspect, column, alias, MetaDa
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.declarative import declarative_base
 from models import Banana
+from models import RDM
 
 Base = declarative_base()
 
@@ -177,3 +179,44 @@ class DatabaseHandler:
             print("Database backup completed.")
         except Exception as e:
             print(f"Error performing database backup: {str(e)}")
+
+    def create_rdm(self, service_name, ip_address, port, service_type, resource_availability):
+        with self.Session() as session:
+            rdm = RDM(
+                service_name=service_name,
+                ip_address=ip_address,
+                port=port,
+                service_type=service_type,
+                resource_availability=resource_availability
+            )
+            session.add(rdm)
+            session.commit()
+            return rdm.id
+
+    def get_rdm_by_id(self, rdm_id):
+        with self.Session() as session:
+            return session.query(RDM).filter_by(id=rdm_id).first()
+
+    def get_all_rdms(self):
+        with self.Session() as session:
+            return session.query(RDM).all()
+
+    def update_rdm(self, rdm_id, **kwargs):
+        with self.Session() as session:
+            rdm = session.query(RDM).filter_by(id=rdm_id).first()
+            if rdm:
+                for key, value in kwargs.items():
+                    setattr(rdm, key, value)
+                rdm.timestamp = datetime.utcnow()
+                session.commit()
+                return True
+            return False
+
+    def delete_rdm(self, rdm_id):
+        with self.Session() as session:
+            rdm = session.query(RDM).filter_by(id=rdm_id).first()
+            if rdm:
+                session.delete(rdm)
+                session.commit()
+                return True
+            return False
