@@ -2,7 +2,6 @@ import os
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk, filedialog, messagebox
-
 import netifaces
 import numpy as np
 import pandas as pd
@@ -1364,7 +1363,7 @@ class WindowMaker:
 
     def main(self):
         # Run hardware tests before starting the main application, does take a few seconds to run
-        # self.run_hardware_tests()
+        self.run_hardware_tests()
 
         # Start a thread for displaying stats
         stats_thread = threading.Thread(target=self.display_stats, daemon=True)

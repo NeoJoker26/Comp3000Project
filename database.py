@@ -207,7 +207,7 @@ class DatabaseHandler:
             if rdm:
                 for key, value in kwargs.items():
                     setattr(rdm, key, value)
-                rdm.timestamp = datetime.utcnow()
+                rdm.timestamp = datetime.datetime.now()
                 session.commit()
                 return True
             return False
